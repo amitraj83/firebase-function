@@ -14,78 +14,69 @@ var config = {
 
 firebase.initializeApp(config);
 
-//var serviceAccount = require("./qcutbiz-c375e639909a.json");
-//
-//admin.initializeApp({
-//  credential: admin.credential.cert(serviceAccount),
-//  databaseURL: "https://qcut-test.firebaseio.com"
-//});
-
 admin.initializeApp();
+var moment = require('moment');
 
-//exports.scheduledFunction = functions.pubsub.schedule('every 1 minutes').onRun((context) => {
+exports.shopDetails = function() {
+    return new Promise( (resolve, reject) => {
+            console.log('Inside Promise');
+        admin.database.ref('/shopDetails')
+        .once('value').then((dataSnapshot) => {
+          // handle read data.
+          console.log("Key : "+dataSnapshot.key);
+          return dataSnapshot;
+        }).catch(() => { console.log('No'); return false;});
+    }).then(() => { console.log('Success2'); return true;}).catch(() => { console.log('Failed2'); return false;});
+};
+
+
+exports.scheduledFunction = functions.pubsub.schedule('every 1 minutes').onRun((context) => {
   console.log('This will be run every 1 minutes!');
+  var date = new Date();
+  var today = moment(date).format('DDMMYYYY');
+console.log(today);
 
-//    var rootRef = admin.database().ref();
-//    console.log(rootRef);
-  
 
-exports.shopDetailsUpdate = functions.database.ref("/shopDetails/-M5hCL0DhhMJ9TM8jB0j")
+var shopDetailsData = function() {
+    return new Promise( (resolve, reject) => {
+                console.log("Inside Promise");
+        admin.database.ref('/shopDetails')
+        .once('value').then((dataSnapshot) => {
+          // handle read data.
+          console.log("Key : "+dataSnapshot.key);
+          return dataSnapshot;
+        }).catch(() => { console.log('No'); return false;});
+    }).then(() => { console.log('Success'); return true;}).catch(() => { console.log('Failed-1'); return false;});
+};
+shopDetailsData();
+shopDetails();
+return true;
+});
+
+
+
+
+
+//exports.waitingQueueUpdate =
+
+/*exports.waitingQueueUpdate = functions.database.ref("/barberWaitingQueues")
                             .onUpdate((change, context) => {
-            console.log('This is the update');
-             var before = change.before  // DataSnapshot before the change
-             var after = change.after  // DataSnapshot after the change
-             console.log(change.before.child("key").val())
-             return "Update was called";
-           });
-/*exports.shopDetailsCreate = functions.database.ref("/shopDetails/-M5hCL0DhhMJ9TM8jB0j")
-                            .onCreate((snapshot, context) => {
-            console.log('This is the Create');
-             console.log(snapshot.exists())
-             return "Create was called";
-           });*/
+    console.log('This is the update' - context.params.pushId);
+     var before = change.before;  // DataSnapshot before the change
+     var shopKey = change.after ; // DataSnapshot after the change
+     console.log(shopKey.key);
+        shopKey.key.ref.
+     const authVar = context.auth; // Auth information for the user.
+     console.log("resource "+resource.type);
 
+//             shopKey.forEach((barber) => {
+//                console.log(barber.key);
+//                barber.forEach((customer) => {
+//                    console.log(customer.key);
+//                });
+//             });
 
+     return "Update was called";
+});*/
 
-/*exports.shopDetailsWrite = functions.database.ref("/shopDetails/-M5hCL0DhhMJ9TM8jB0j")
-                           .onWrite((snapshot, context) => {
-           console.log('This is the Write');
-            console.log(snapshot.exists())
-            return "write was called";
-          });*/
-/*
-
-
-		snapshot.forEach(function(childSnapshot) {
-		  var shopKey = childSnapshot.key;
-			const timeStamp = admin.database.ServerValue.TIMESTAMP;
-			const currentTime = new Date(timeStamp);
-			const currentDate = currentTime.getDate().toString;
-			const currentMonth = currentTime.getMonth().toString;
-			const currentYear = currentTime.getFullYear().toString;
-			const dateFormat = currentDate + " " + currentMonth + " " + currentYear;
-			console.log(dateFormat);
-
-			var shopQueueKey = shopKey + "_" + dateFormat;
-            console.log(shopQueueKey);
-
-            var queueList = functions.database.ref().ref("barberWaitingQueues/"+shopQueueKey);
-            queueList.once("value").then((queueSnapshot) => {
-
-                queueSnapshot.forEach(function(barberSnapshot) {
-                    console.log(barberSnapshot.key);
-                });
-
-                return null;
-            }).catch(error => { throw error;});
-
-
-
-	  });
-
-	  return null;
-	}).catch(error => { throw error;});
-	  */
-//    return "";
-//});
 
