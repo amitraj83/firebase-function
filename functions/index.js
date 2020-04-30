@@ -16,67 +16,33 @@ firebase.initializeApp(config);
 
 admin.initializeApp();
 var moment = require('moment');
-
-exports.shopDetails = function() {
-    return new Promise( (resolve, reject) => {
-            console.log('Inside Promise');
-        admin.database.ref('/shopDetails')
-        .once('value').then((dataSnapshot) => {
-          // handle read data.
-          console.log("Key : "+dataSnapshot.key);
-          return dataSnapshot;
-        }).catch(() => { console.log('No'); return false;});
-    }).then(() => { console.log('Success2'); return true;}).catch(() => { console.log('Failed2'); return false;});
-};
-
-
-exports.scheduledFunction = functions.pubsub.schedule('every 1 minutes').onRun((context) => {
-  console.log('This will be run every 1 minutes!');
-  var date = new Date();
-  var today = moment(date).format('DDMMYYYY');
-console.log(today);
-
-
-var shopDetailsData = function() {
-    return new Promise( (resolve, reject) => {
-                console.log("Inside Promise");
-        admin.database.ref('/shopDetails')
-        .once('value').then((dataSnapshot) => {
-          // handle read data.
-          console.log("Key : "+dataSnapshot.key);
-          return dataSnapshot;
-        }).catch(() => { console.log('No'); return false;});
-    }).then(() => { console.log('Success'); return true;}).catch(() => { console.log('Failed-1'); return false;});
-};
-shopDetailsData();
-shopDetails();
-return true;
-});
+var date = new Date();
+  const today = moment(date).utcOffset('+0100').format('DDMMYYYY');
 
 
 
-
-
-//exports.waitingQueueUpdate =
-
-/*exports.waitingQueueUpdate = functions.database.ref("/barberWaitingQueues")
+exports.waitingQueueUpdate = functions.database.ref("/barberWaitingQueues")
                             .onUpdate((change, context) => {
     console.log('This is the update' - context.params.pushId);
      var before = change.before;  // DataSnapshot before the change
      var shopKey = change.after ; // DataSnapshot after the change
-     console.log(shopKey.key);
-        shopKey.key.ref.
-     const authVar = context.auth; // Auth information for the user.
-     console.log("resource "+resource.type);
-
-//             shopKey.forEach((barber) => {
-//                console.log(barber.key);
-//                barber.forEach((customer) => {
-//                    console.log(customer.key);
-//                });
-//             });
-
+     console.log("snapshot key :"+shopKey.key);
+    shopKey.forEach((shop) => {
+        console.log(today);
+        console.log("shop key :"+shop.key);
+        console.log("shop key Ends with :"+shop.key.endsWith(today));
+        if (shop.key.endsWith(today) ) {
+            console.log("its today key :"+shop.key);
+            shop.forEach((barber) => {
+                console.log("barber key :"+barber.key);
+                barber.forEach((customer) => {
+                    console.log("customer key :"+customer.key);
+                    shopKey.ref.parent.child("customerView/"+customer.key).set(customer.toJSON());
+                });
+            });
+        }
+    });
      return "Update was called";
-});*/
+});
 
 
