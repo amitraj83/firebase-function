@@ -28,22 +28,47 @@ var moment = require('moment');
 
 exports.scheduledFunction = functions.pubsub.schedule('every 1 minutes').onRun((context) => {
 
-
-
-
-
 var date = new Date();
 const today = moment(date).utcOffset('+0100').format('DDMMYYYY');
 console.log("Today: "+today);
 var db = admin.database();
-var ref = db.ref("/shopDetails");
+var ref = db.ref("/Customers/t60nZazByXZczXt1rBat0whcVGJ3/notificationFirebaseToken");
+
 
 return ref.once("value", function(snapshot) {
 
     var a = snapshot.numChildren();
     console.log("Number of records : "+a);
-    console.log(snapshot.val());
+
+    var registrationToken = snapshot.val();
+    console.log("registrationToken: "+registrationToken);
+    if (registrationToken !== null && registrationToken !== '') {
+
+        var message = {
+        data: {
+        title: 'Title From Cloud',
+        content: 'Content From Cloud'
+        },
+        token: registrationToken
+        };
+
+        admin.messaging().send(message)
+        .then((response) => {
+            console.log('Successfully sent message:', response);
+            return true;
+        }).catch((error) => {
+            console.log('Error sending message:', error);
+        });
+    }
 });
+
+
+//return ref.once("value", function(snapshot) {
+//
+//    var a = snapshot.numChildren();
+//    console.log("Number of records : "+a);
+//    console.log(snapshot.val());
+//});
 
 
 
