@@ -40,26 +40,18 @@ return ref.once("value", function(snapshot) {
     var a = snapshot.numChildren();
 
      snapshot.forEach((shop) => {
-             console.log(today);
-             console.log("shop key :"+shop.key);
-             console.log("shop key Ends with :"+shop.key.endsWith(today));
              if (shop.key.endsWith(today) ) {
-                 console.log("its today key :"+shop.key);
                  shop.forEach((barber) => {
-                     console.log("barber key :"+barber.key);
                      barber.forEach((customer) => {
-                         console.log("customer key :"+customer.key);
                          var customerStatus = customer.child("status").val();
-                         console.log("customer status :"+customerStatus);
                          if(customerStatus !== null && customerStatus === "QUEUE") {
                            var expectedWaitingTime = customer.child("expectedWaitingTime").val();
-                           console.log("customer waiting time :"+expectedWaitingTime);
-                            db.ref("Customers/"+customer.key).once("value", function(customerSnapshot) {
-                                console.log("customer in customer DB :"+customerSnapshot.key);
-                                if (customerSnapshot.child("notificationFirebaseToken").exists()) {
-                                    var registrationToken = customerSnapshot.child("notificationFirebaseToken").val();
-                                    console.log("customer token :"+registrationToken);
-                                    if (registrationToken !== null && registrationToken !== '') {
+                            db.ref("Customers/"+customer.key+"/notificationFirebaseTokens").once("value", function(customerSnapshot) {
+                                if (customerSnapshot.exists()) {
+                                    customerSnapshot.forEach((deviceid) => {
+                                        var registrationToken = deviceid.val();
+                                        console.log(deviceid.key + " -- "+registrationToken);
+                                        if (registrationToken !== null && registrationToken !== '') {
                                             var message = {
                                             data: {
                                                 "waitingTime": String(expectedWaitingTime)
@@ -75,6 +67,7 @@ return ref.once("value", function(snapshot) {
                                                 console.log('Error sending message for customer - '+customerSnapshot.key, error);
                                             });
                                         }
+                                    });
                                 }
 
                             });
