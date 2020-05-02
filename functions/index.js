@@ -53,6 +53,9 @@ return ref.once("value", function(snapshot) {
                                         console.log(deviceid.key + " -- "+registrationToken);
                                         if (registrationToken !== null && registrationToken !== '') {
                                             var message = {
+                                            android : {
+                                                priority : "high"
+                                            },
                                             data: {
                                                 "waitingTime": String(expectedWaitingTime)
                                             },
