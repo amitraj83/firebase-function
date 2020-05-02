@@ -30,12 +30,77 @@ exports.scheduledFunction = functions.pubsub.schedule('every 1 minutes').onRun((
 
 var date = new Date();
 const today = moment(date).utcOffset('+0100').format('DDMMYYYY');
-console.log("Today: "+today);
 var db = admin.database();
-var ref = db.ref("/Customers/t60nZazByXZczXt1rBat0whcVGJ3/notificationFirebaseToken");
+//var ref = db.ref("/Customers/t60nZazByXZczXt1rBat0whcVGJ3/notificationFirebaseToken");
+var ref = db.ref("barberWaitingQueues");
 
 
 return ref.once("value", function(snapshot) {
+
+    var a = snapshot.numChildren();
+
+     snapshot.forEach((shop) => {
+             console.log(today);
+             console.log("shop key :"+shop.key);
+             console.log("shop key Ends with :"+shop.key.endsWith(today));
+             if (shop.key.endsWith(today) ) {
+                 console.log("its today key :"+shop.key);
+                 shop.forEach((barber) => {
+                     console.log("barber key :"+barber.key);
+                     barber.forEach((customer) => {
+                         console.log("customer key :"+customer.key);
+                         var customerStatus = customer.child("status").val();
+                         console.log("customer status :"+customerStatus);
+                         if(customerStatus !== null && customerStatus === "QUEUE") {
+                           var expectedWaitingTime = customer.child("expectedWaitingTime").val();
+                           console.log("customer waiting time :"+expectedWaitingTime);
+                            db.ref("Customers/"+customer.key).once("value", function(customerSnapshot) {
+                                console.log("customer in customer DB :"+customerSnapshot.key);
+                                if (customerSnapshot.child("notificationFirebaseToken").exists()) {
+                                    var registrationToken = customerSnapshot.child("notificationFirebaseToken").val();
+                                    console.log("customer token :"+registrationToken);
+                                    if (registrationToken !== null && registrationToken !== '') {
+                                            var message = {
+                                            data: {
+                                                "waitingTime": String(expectedWaitingTime)
+                                            },
+                                                token: registrationToken
+                                            };
+
+                                            admin.messaging().send(message)
+                                            .then((response) => {
+                                                console.log('Successfully sent message for customer - '+customerSnapshot.key, response);
+                                                return true;
+                                            }).catch((error) => {
+                                                console.log('Error sending message for customer - '+customerSnapshot.key, error);
+                                            });
+                                        }
+                                }
+
+                            });
+                         }
+                     });
+                 });
+             } else {
+                //Old queues+
+                //Archive them
+                console.log("its not today key :"+shop.key);
+                db.ref("archivedQueues").child(shop.key).set(shop.toJSON())
+                .then(function() {
+                   console.log('Shop key archived successfully - '+shop.key);
+                   db.ref("barberWaitingQueues").child(shop.key).remove();
+                   return true;
+                 })
+                 .catch(function(error) {
+                   console.log('Shop Archive failed - '+shop.key);
+                 });
+
+             }
+
+         });
+});
+
+/*return ref.once("value", function(snapshot) {
 
     var a = snapshot.numChildren();
     console.log("Number of records : "+a);
@@ -60,7 +125,7 @@ return ref.once("value", function(snapshot) {
             console.log('Error sending message:', error);
         });
     }
-});
+});*/
 
 
 //return ref.once("value", function(snapshot) {
