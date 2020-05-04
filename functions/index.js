@@ -111,19 +111,19 @@ function BarberQueue(key, shopKey, status, avgTimeToCut) {
     this.customers = new Array();
 }
 BarberQueue.prototype.getStatus = function() {
-  retun this.barberStatus;
+  return this.barberStatus;
 };
 BarberQueue.prototype.getKey = function() {
-  retun this.barberKey;
+  return this.barberKey;
 };
 BarberQueue.prototype.getShopKey = function() {
-  retun this.shopKey;
+  return this.shopKey;
 };
 BarberQueue.prototype.getAvgTimeToCut = function() {
-  retun this.avgTimeToCut;
+  return this.avgTimeToCut;
 };
 BarberQueue.prototype.getCustomers = function() {
-  retun this.customers;
+  return this.customers;
 };
 
 BarberQueue.prototype.addCustomer = function(customer) {
@@ -186,7 +186,7 @@ function CustomerComparator(customer1, customer2) {
     
     if(c1Time > c2Time) {
         return 1;
-    } else if (c1Time == c2Time) {
+    } else if (c1Time === c2Time) {
         return 0;
     } else {
         return -1;
@@ -198,25 +198,26 @@ Object.exists = function(obj) {
 }
 
 
-function barberWithStatus(promiseReceived, aShop) {
-    
-    promiseReceived[1] =  new Promise(function(resolve, reject) {
+function barberWithStatus(promiseReceived) {
+    console.log("in barberwithstatus: aShop - "+promiseReceived[0]);
+    var aShop = promiseReceived[0];
+    promiseReceived[1] =  new Promise((resolve, reject) => {
                                 var statuses = new Array();
-                                db.ref("barbers/"+aShop.key).once("value", function(snapshot) {
+                                console.log("in barberwithstatus 1: aShop - "+aShop);
+                                db.ref("barbers/"+aShop.key).once("value", (snapshot) => {
                                      snapshot.forEach((barber) => {
                                         statuses[barber.key] = barber.child("queueStatus").val();
                                      })
                                      resolve(statuses);
                                  });
-                                return reject();
+
                             });
     return Promise.all(promiseReceived);
 }
 
-function listOfBarberQueues(promiseReceived, aShop) {
-
-    promiseReceived[2] = new Promise(function(resolve, reject) {
-            db.ref("barberWaitingQueues").once("value", function(snapshot) {
+function listOfBarberQueues(promiseReceived) {
+    var aShop = promiseReceived[0];
+    promiseReceived[2] = db.ref("barberWaitingQueues").once("value", (snapshot) => {
                 var barberQueues = new Array();
                 snapshot.forEach((shop) => {
                      if (shop.key+"_"+today === aShop.key ) {
@@ -232,17 +233,20 @@ function listOfBarberQueues(promiseReceived, aShop) {
                      }
                     
                 });
-                resolve(barberQueues);
+                console.log("in ListofBarberQueues - return -> "+barberQueues);
+                return (barberQueues);
             });
-            return reject();
-        });
+
+
     return Promise.all([promiseReceived]);
 }
 
-function barberSortedList(promiseReceived, aShop) {
+function barberSortedList(promiseReceived) {
+    var aShop = promiseReceived[0];
     //Filter out barbers who are stopped
     //return the list of barbers sorted by time to become avaialble
     var barberQueues = promiseReceived[2];
+    console.log("Barber queues : "+barberQueues);
     var listBarberSorted = new Array();
     barberQueues.forEach(barberQueue => {
         var barberStatus = barberQueue.getStatus();
@@ -274,8 +278,9 @@ function barberSortedList(promiseReceived, aShop) {
     return Promise.all(promiseReceived);
 }
 
-function removeAndGetAllCustomerToBeAddedLater(promiseReceived, aShop) {
+function removeAndGetAllCustomerToBeAddedLater(promiseReceived ) {
 //All Customer in the queue should be removed and put in a set.
+    var aShop = promiseReceived[0];
     var allQueuedCustomerSorted = new Array();
     var barberQueues = promiseReceived[2];
     barberQueues.forEach(barberQueue => {
@@ -285,12 +290,12 @@ function removeAndGetAllCustomerToBeAddedLater(promiseReceived, aShop) {
                     if (customer.child("status").val() === "QUEUE") {
                         
                         db.ref("barberWaitingQueues").child(barberQueue.getShopKey()).child(barberQueue.getKey()).child(customer.key).ref.remove()
-                        .then(function() {
+                        .then(() => {
                             console.log("Remove succeeded.")
                             allQueuedCustomerSorted.push(customer);
                             return true;
                           })
-                          .catch(function(error) {
+                          .catch((error) => {
                             console.log("Remove failed: " + error.message)
                           });
                     }
@@ -302,7 +307,8 @@ function removeAndGetAllCustomerToBeAddedLater(promiseReceived, aShop) {
     return Promise.all(promiseReceived);
 }
 
-function assignCustomersToBarbers(promiseReceived, aShop) {
+function assignCustomersToBarbers(promiseReceived) {
+    var aShop = promiseReceived[0];
     var sortedListOfCustomer = promiseReceived[4];
     var sortedListOfBarbers = promiseReceived[3];
     var placeInQueue = 1;
@@ -317,7 +323,7 @@ function assignCustomersToBarbers(promiseReceived, aShop) {
         if (Object.exists(barberKey) && barberKey !== "") {
             customer.child("timeAdded").set(placeInQueue++);
             db.ref("barberWaitingQueues").child(aShop.key+"_"+today).child(barberKey).child(customer.key).set(customer.toJSON())
-            .then(function() {
+            .then(() => {
                console.log('Customer rellatocation successfully for customer - '+customer.key);
                sortedListOfBarbers.forEach(sortedBarber => {
                    if(sortedBarber.getKey() === barberKey) {
@@ -327,7 +333,7 @@ function assignCustomersToBarbers(promiseReceived, aShop) {
                });
                return true;
              })
-             .catch(function(error) {
+             .catch((error) => {
                console.log('Reallocation of customer is failed. Trying again - '+customer.key);
                 db.ref("barberWaitingQueues").child(currentShopKey).child(barberKey).child(customer.key).set(customer.toJSON());
                 sortedListOfBarbers.forEach(sortedBarber => {
@@ -348,17 +354,17 @@ function assignCustomersToBarbers(promiseReceived, aShop) {
 
 function updateWaitingTimes(aShopKey) {
     
-    db.ref("barberWaitingQueues/"+aShopKey+"_"+today).once("value", function(shop) {
+    db.ref("barberWaitingQueues/"+aShopKey+"_"+today).once("value", (shop) => {
         
-         new Promise(function (resolve, reject) {
+         new Promise( (resolve, reject) => {
 
-             db.ref("shopDetails/"+aShopKey).once("value", function(snapshot) {
+            return db.ref("shopDetails/"+aShopKey).once("value", (snapshot) => {
                         return resolve(snapshot.child("avgTimeToCut").val());
                 });
 
-              return reject();
+
             })
-            .then(function (avgTimeToCut) {
+            .then( (avgTimeToCut) => {
 
                 shop.forEach((barber) => {
                     //here we need to update the timings
@@ -411,9 +417,12 @@ function updateWaitingTimes(aShopKey) {
                     }
 
                  });
+                 return true;
+            }).catch((error) => {
+                console.log(error);
             });
 
-        resolve(barberQueues);
+
     });
 
 return true;
@@ -423,53 +432,66 @@ return true;
 exports.scheduledFunction = functions.pubsub.schedule('every 1 minutes').onRun((context) => {
 //Following should run for each shop
 
-db.ref("shopDetails").once("value", function(snapshot) {
+return db.ref("shopDetails").once("value", (snapshot) => {
     snapshot.forEach((aShop) => {
-    var sShopAvgTimeToCut = shop.child("avgTimeToCut").val();
-
+    console.log("Fetching shop avg time");
+    var sShopAvgTimeToCut = aShop.child("avgTimeToCut").val();
+    console.log("Fetched shop avg time");
     //transaction starts here on a shop
+    console.log("Starting transaction for shop : "+aShop.key +" Today : "+today);
     var shopQueuesReference = db.ref("barberWaitingQueues/"+aShop.key+"_"+today);
-    return shopQueuesReference.transaction(function(shopQueuesJSON) {
-        if (shopQueuesJSON === null) {
-        return ; //abort transaction
+    return shopQueuesReference.transaction((shopQueuesJSON) => {
+        console.log("first thing in the transaction - Shop Key : "+aShop.key)
+        if (shopQueuesJSON !== null) {
+            console.log("json returned null");
+            return ; //abort transaction
         } else {
             //Performe re-allocation
-            return new Promise(function (resolve, reject) {
-              var promiseReceived = new Array();
-              promiseReceived[0] = true;
-              return promiseReceived;
+            console.log("Starting re-allocation of customers" + aShop.key);
+//            return new Promise(function (resolve, reject, aShop) {
+//              var promiseReceived = new Array();
+//              promiseReceived[0] = aShop;
+//              console.log("Returning first promise: "+aShop.key);
+//              resolve (promiseReceived);
+//            })
+            return Promise.all([aShop]).then( (promiseReceived) => {
+            console.log("executing barberWithStatus "+promiseReceived[0]);
+            console.log("executing barberWithStatus shop key: "+promiseReceived[0].key);
+            return ( barberWithStatus(promiseReceived));
             })
-            .then(function (promiseReceived, aShop) {
-            return barberWithStatus(promiseReceived, aShop);
-            })
-            .then(function (promiseReceived, aShop) {
+            .then( (promiseReceived) => {
             //real all data
-            return listOfBarberQueues(promiseReceived, aShop);
+            console.log("executing listOfBarberQueues ");
+            return ( listOfBarberQueues(promiseReceived));
             })
-            .then(function (promiseReceived, aShop) {
+            .then( (promiseReceived) => {
             //sortedListOfBarbersForReAllocation
-            return barberSortedList(promiseReceived, aShop);
+            console.log("executing barberSortedList ");
+            return ( barberSortedList(promiseReceived));
             })
-            .then(function (promiseReceived, aShop){
+            .then( (promiseReceived) => {
             //removeAndGetAllCustomerToBeAddedLater
-            return removeAndGetAllCustomerToBeAddedLater(promiseReceived, aShop);
+            console.log("executing removeAndGetAllCustomerToBeAddedLater ");
+            return ( removeAndGetAllCustomerToBeAddedLater(promiseReceived));
             })
-            .then(function (promiseReceived, aShop){
+            .then( (promiseReceived) => {
             //assignCustomersToBarbers
-            return assignCustomersToBarbers(promiseReceived, aShop);
+            console.log("executing assignCustomersToBarbers ");
+            assignCustomersToBarbers(promiseReceived)
+            return (promiseReceived[0] );
             })
-            .catch(function (error) {
-            console.log(error); // 'Some terrrrible error.'
+            .catch( (error) => {
+            console.log("Error while transaction execution: "+error); // 'Some terrrrible error.'
             });
 
             //transaction should ends here
             }
         },
-        function(error, committed, snapshot) {
+        (error, committed, aShop) => {
           if (error) {
             console.log('Transaction failed abnormally!', error);
           } else if (!committed) {
-            console.log('We aborted the transaction.');
+            console.log('We aborted the transaction.'+committed);
           } else {
             console.log('Transaction successful. Updating waiting times now');
             updateWaitingTimes(aShop.key);
