@@ -201,38 +201,36 @@ Object.exists = function(obj) {
 function barberWithStatus(promiseReceived) {
     console.log("in barberwithstatus: aShop - "+promiseReceived[0]);
     var aShop = promiseReceived[0];
-    promiseReceived[1] =  new Promise((resolve, reject) => {
-                                var statuses = new Array();
-                                console.log("in barberwithstatus 1: aShop - "+aShop);
-                                db.ref("barbers/"+aShop.key).once("value", (snapshot) => {
+    console.log("in barberwithstatus 1: aShop - "+aShop);
+    promiseReceived[1] = db.ref("barbers/"+aShop.key).once("value", (snapshot) => {
+                                    var statuses = new Array();
                                      snapshot.forEach((barber) => {
                                         statuses[barber.key] = barber.child("queueStatus").val();
                                      })
-                                     resolve(statuses);
+                                     return (statuses);
                                  });
 
-                            });
+
     return Promise.all(promiseReceived);
 }
 
 function listOfBarberQueues(promiseReceived) {
     var aShop = promiseReceived[0];
-    promiseReceived[2] = db.ref("barberWaitingQueues").once("value", (snapshot) => {
+    console.log("waiting queue ref : "+aShop.key+"_"+today);
+    promiseReceived[2] = db.ref("barberWaitingQueues/"+aShop.key+"_"+today).once("value", (snapshot) => {
                 var barberQueues = new Array();
-                snapshot.forEach((shop) => {
-                     if (shop.key+"_"+today === aShop.key ) {
-                         shop.forEach((barber) => {
-                             var avgTimeToCut = promiseReceived[0][barber.key];
-                             var barberQueue = new BarberQueue(barber.key, shop.key.substring(0, shop.key.indexOf("_")), status, avgTimeToCut);
-                             barberQueues.push(barberQueue);
-                             barber.forEach((customer) => {
-                                    barberQueue.addCustomer(customer);
+                 snapshot.forEach((barber) => {
+                     var avgTimeToCut = promiseReceived[0].avgTimeToCut;
+                     console.log("listOfBarberQueues => avgTimeToCut : "+avgTimeToCut);
+                     var status = promiseReceived[1][barber.key];
+                     console.log("listOfBarberQueues => status : "+status);
+                     var barberQueue = new BarberQueue(barber.key, aShop.key, status, avgTimeToCut);
+                     barberQueues.push(barberQueue);
+                     barber.forEach((customer) => {
+                            barberQueue.addCustomer(customer);
 
-                             })
-                         })
-                     }
-                    
-                });
+                     })
+                 });
                 console.log("in ListofBarberQueues - return -> "+barberQueues);
                 return (barberQueues);
             });
@@ -247,6 +245,7 @@ function barberSortedList(promiseReceived) {
     //return the list of barbers sorted by time to become avaialble
     var barberQueues = promiseReceived[2];
     console.log("Barber queues : "+barberQueues);
+
     var listBarberSorted = new Array();
     barberQueues.forEach(barberQueue => {
         var barberStatus = barberQueue.getStatus();
@@ -434,13 +433,14 @@ exports.scheduledFunction = functions.pubsub.schedule('every 1 minutes').onRun((
 
 return db.ref("shopDetails").once("value", (snapshot) => {
     snapshot.forEach((aShop) => {
-    console.log("Fetching shop avg time");
-    var sShopAvgTimeToCut = aShop.child("avgTimeToCut").val();
-    console.log("Fetched shop avg time");
-    //transaction starts here on a shop
-    console.log("Starting transaction for shop : "+aShop.key +" Today : "+today);
-    var shopQueuesReference = db.ref("barberWaitingQueues/"+aShop.key+"_"+today);
-    return shopQueuesReference.transaction((shopQueuesJSON) => {
+    try {
+        console.log("Fetching shop avg time");
+        var sShopAvgTimeToCut = aShop.child("avgTimeToCut").val();
+        console.log("Fetched shop avg time");
+        //transaction starts here on a shop
+        console.log("Starting transaction for shop : "+aShop.key +" Today : "+today);
+        var shopQueuesReference = db.ref("barberWaitingQueues/"+aShop.key+"_"+today);
+        shopQueuesReference.transaction((shopQueuesJSON) => {
         console.log("first thing in the transaction - Shop Key : "+aShop.key)
         if (shopQueuesJSON !== null) {
             console.log("json returned null");
@@ -461,13 +461,19 @@ return db.ref("shopDetails").once("value", (snapshot) => {
             })
             .then( (promiseReceived) => {
             //real all data
-            console.log("executing listOfBarberQueues ");
+            console.log("executing listOfBarberQueues for shop - "+promiseReceived[0].key);
             return ( listOfBarberQueues(promiseReceived));
             })
             .then( (promiseReceived) => {
-            //sortedListOfBarbersForReAllocation
-            console.log("executing barberSortedList ");
-            return ( barberSortedList(promiseReceived));
+                //sortedListOfBarbersForReAllocation
+                console.log("executing barberSortedList ");
+                var barberQueues = promiseReceived[2];
+                console.log("Barber queues : "+barberQueues);
+                if (Object.exists(barberQueues)) {
+                   return ( barberSortedList(promiseReceived));
+                } else {
+                     throw new Error("No barber queue exists for shop : "+promiseReceived[0].key);
+                }
             })
             .then( (promiseReceived) => {
             //removeAndGetAllCustomerToBeAddedLater
@@ -488,6 +494,9 @@ return db.ref("shopDetails").once("value", (snapshot) => {
             }
         },
         (error, committed, aShop) => {
+          console.log("After transaction complete : "+aShop);
+          console.log("After transaction complete 2 : "+aShop[0]);
+          console.log("After transaction complete 3 : "+aShop[0]);
           if (error) {
             console.log('Transaction failed abnormally!', error);
           } else if (!committed) {
@@ -499,6 +508,9 @@ return db.ref("shopDetails").once("value", (snapshot) => {
 
         });
 
+        } catch(e) {
+            console.log("Exception for shop - "+aShop.key);
+        }
 
         });
     });
