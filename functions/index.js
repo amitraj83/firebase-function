@@ -161,9 +161,9 @@ function CompareForBarberSorted(BarberSorted1, BarberSorted2){
 }
 
 function getCustomerTime (customer) {
-    var customerArrivalTime = customer.child("arrivalTime").val();
+    var customerArrivalTime = customer.arrivalTime;
 
-    var customerDragTime = customer.child("dragAdjustedTime").val();
+    var customerDragTime = customer.dragAdjustedTime;
     
     if(Object.exists(customerArrivalTime)) {
         if(Object.exists(customerDragTime)) {
@@ -281,7 +281,7 @@ function barberSortedList(aShop, barberQueues) {
                 }
                 
             });
-            listBarberSorted.push(new BarberSorted(barberQueue.getKey, remainingMinsToComplete, avgTimeToCut) ) ;
+            listBarberSorted.push(new BarberSorted(barberQueue.getKey(), remainingMinsToComplete, avgTimeToCut) ) ;
         }
     });
     return listBarberSorted.sort(CompareForBarberSorted);
@@ -310,30 +310,41 @@ function removeAndGetAllCustomerToBeAddedLater(aShop, barberQueues, barberSorted
                                 console.log("[REMOVEANDSORT] --- In Queue customer key" + customer.key);
                                 console.log("[REMOVEANDSORT] --- barberQueue.getShopKey " + barberQueue.getShopKey());
                                 var custInJSON = customer.toJSON();
-                                eachPromises.push(
+                                allQueuedCustomerSorted.push(custInJSON);
+                                db.ref("barberWaitingQueues").child(barberQueue.getShopKey()+"_"+today)
+                                                                            .child(barberQueue.getKey()).child(customer.key)
+                                                                            .ref.remove();
+                                /*eachPromises.push(
                                     new Promise((resolve, reject) => {
                                     return db.ref("barberWaitingQueues").child(barberQueue.getShopKey()+"_"+today)
                                             .child(barberQueue.getKey()).child(customer.key)
-                                            .ref.remove(() => {
-                                                console.log("Remove succeeded for "+customer.key);
-                                                allQueuedCustomerSorted.push(custInJSON);
-                                                console.log("[REMOVEANDSORT] --- sorted allQueuedCustomerSorted " + JSON.stringify(allQueuedCustomerSorted));
+                                            .ref.remove();
 
-                                            }) ;
+//                                            .ref.remove(() => {
+//                                                console.log("Remove succeeded for "+customer.key);
+//                                                allQueuedCustomerSorted.push(custInJSON);
+//                                                console.log("[REMOVEANDSORT] --- sorted allQueuedCustomerSorted " + JSON.stringify(allQueuedCustomerSorted));
+//                                                resolve(allQueuedCustomerSorted);
+//                                            }) ;
                                     })
-                                )
+                                )*/
+
                             }
                         }
                     });
                 }
+                resolve(allQueuedCustomerSorted);
             });
-        return Promise.all([eachPromises, allQueuedCustomerSorted]);
-    }).then((tempSortedCustomer) => {
-        var allQueuedCustomerSorted = tempSortedCustomer[1];
-        console.log("In THEN Clause : "+JSON.stringify(allQueuedCustomerSorted));
-        var finalSortedArray =  allQueuedCustomerSorted.sort(CustomerComparator);
-        return Promise.all([finalSortedArray]);
-    }).catch((error) => {
+        return Promise.all([allQueuedCustomerSorted]);
+    })
+//    .then((tempSortedCustomer) => {
+//        console.log("In THEN Clause tempSortedCustomer : "+JSON.stringify(tempSortedCustomer));
+//        var allQueuedCustomerSorted = tempSortedCustomer[1];
+//        console.log("In THEN Clause : "+JSON.stringify(allQueuedCustomerSorted));
+//        var finalSortedArray =  allQueuedCustomerSorted.sort(CustomerComparator);
+//        return Promise.all([finalSortedArray]);
+//    })
+    .catch((error) => {
         console.log("Error while removeAndGetAllCustomerToBeAddedLater: "+error)
     });
 
@@ -351,51 +362,59 @@ function assignCustomersToBarbers(aShop, barberQueues, sortedListOfBarbers, sort
     var allPromises = {};
     sortedListOfCustomer.forEach(customer => {
         var barberKey = "";
-        if(Object.exists(customer) && Object.exists(customer.child("anyBarber")) && customer.child("anyBarber").val() === true) {
+        if(Object.exists(customer) && Object.exists(customer.anyBarber) && customer.anyBarber === true) {
             barberKey = sortedListOfBarbers[0].getKey();
             console.log("["+aShop.key+"] "+"in assignCustomersToBarbers => any barber key "+JSON.stringify(barberKey));
         } else {
-            barberKey = customer.child("preferredBarberKey").val();
+            barberKey = customer.preferredBarberKey;
             console.log("["+aShop.key+"] "+"in assignCustomersToBarbers => preferred barber key "+JSON.stringify(barberKey));
         }
         if (Object.exists(barberKey) && barberKey !== "") {
         console.log("["+aShop.key+"] "+"in assignCustomersToBarbers => barber key "+JSON.stringify(barberKey));
         console.log("["+aShop.key+"] "+"in assignCustomersToBarbers => customer  "+JSON.stringify(customer));
-            customer.child("timeAdded").set(placeInQueue++).then(() => {
 
-                db.ref("barberWaitingQueues").child(aShop.key+"_"+today).child(barberKey).child(customer.key)
+             db.ref("barberWaitingQueues").child(aShop.key+"_"+today).child(barberKey)
+             .child(customer.key)
+            .set(customer)
+            .then(() => {
+               console.log("["+aShop.key+"] "+"Customer rellatocation successfully for customer - "+customer.key);
+               sortedListOfBarbers.forEach(sortedBarber => {
+                   if(sortedBarber.getKey() === barberKey) {
+                       sortedBarber.setTimeToGetAvaialble(sortedBarber.getTimeToGetAvaialble() + sortedBarber.getAvgServiceTime());
+                       sortedListOfBarbers = sortedListOfBarbers.sort(CompareForBarberSorted);
+                   }
+               });
+               console.log("["+aShop.key+"] "+"Reallocation of customer is success. - "+customer.key);
+               allPromises.push( true );
+               return true;
+             })
+             .then(() => {
+                return db.ref("barberWaitingQueues").child(aShop.key+"_"+today).child(barberKey)
+                             .child(customer.key)
+                             .child("timeAdded").set(placeInQueue++);
+             })
+             .catch((error) => {
+               console.log("["+aShop.key+"] "+"Reallocation of customer is failed. Trying again - "+customer.key);
+                db.ref("barberWaitingQueues").child(currentShopKey).child(barberKey).child(customer.key)
                 .set(customer.toJSON())
                 .then(() => {
-                   console.log("["+aShop.key+"] "+"Customer rellatocation successfully for customer - "+customer.key);
-                   sortedListOfBarbers.forEach(sortedBarber => {
+                    db.ref("barberWaitingQueues").child(aShop.key+"_"+today).child(barberKey)
+                                                 .child(customer.key)
+                                                 .child("timeAdded").set(placeInQueue++);
+                    sortedListOfBarbers.forEach(sortedBarber => {
                        if(sortedBarber.getKey() === barberKey) {
                            sortedBarber.setTimeToGetAvaialble(sortedBarber.getTimeToGetAvaialble() + sortedBarber.getAvgServiceTime());
                            sortedListOfBarbers = sortedListOfBarbers.sort(CompareForBarberSorted);
                        }
                    });
-                   console.log("["+aShop.key+"] "+"Reallocation of customer is success. - "+customer.key);
-                   allPromises.push( true );
-                 })
-                 .catch((error) => {
-                   console.log("["+aShop.key+"] "+"Reallocation of customer is failed. Trying again - "+customer.key);
-                    db.ref("barberWaitingQueues").child(currentShopKey).child(barberKey).child(customer.key)
-                    .set(customer.toJSON())
-                    .then(() => {
-
-                        sortedListOfBarbers.forEach(sortedBarber => {
-                           if(sortedBarber.getKey() === barberKey) {
-                               sortedBarber.setTimeToGetAvaialble(sortedBarber.getTimeToGetAvaialble() + sortedBarber.getAvgServiceTime());
-                               sortedListOfBarbers = sortedListOfBarbers.sort(CompareForBarberSorted);
-                           }
-                       });
-                    })
-                    .catch((error) => {
-                        allPromises.push(false);
-                    }) ;
-                 });
+                })
+                .catch((error) => {
+                    throw error;
+                }) ;
+             });
 
 
-            });
+
 
 
         }
@@ -549,14 +568,17 @@ db.ref("shopDetails").once("value", (snapshot) => {
 //            console.log("["+promiseShop.key+"] "+"calling removeAndGetAllCustomerToBeAddedLater => barberQueues"+JSON.stringify(barberQueues));
 //            console.log("["+promiseShop.key+"] "+"calling removeAndGetAllCustomerToBeAddedLater => barberSortedList"+JSON.stringify(barberSortedList));
             var tempPromise = removeAndGetAllCustomerToBeAddedLater(promiseShop, barberQueues, barberSortedList);
-            var queuedCustomersSorted = tempPromise[0];
-            return Promise.all([promiseShop, barberQueues, barberSortedList, queuedCustomersSorted]);
+            return Promise.all([promiseShop, barberQueues, barberSortedList, tempPromise]);
             })
             .then( (promiseReceived) => {
             var promiseShop = promiseReceived[0];
+            console.log("["+promiseShop.key+"] "+"executing assignCustomersToBarbers 1 : "+JSON.stringify(promiseShop));
             var barberQueues = promiseReceived[1];
+            console.log("["+promiseShop.key+"] "+"executing assignCustomersToBarbers 2 : "+JSON.stringify(barberQueues));
             var barberSortedList = promiseReceived[2];
+            console.log("["+promiseShop.key+"] "+"executing assignCustomersToBarbers 3 : "+JSON.stringify(barberSortedList));
             var allQueuedCustomerSorted = promiseReceived[3];
+            allQueuedCustomerSorted = allQueuedCustomerSorted.sort(CustomerComparator);
              console.log("["+promiseShop.key+"] "+"calling assignCustomersToBarbers => allQueuedCustomerSorted"+JSON.stringify(allQueuedCustomerSorted));
             //assignCustomersToBarbers
             console.log("["+promiseShop.key+"] "+"executing assignCustomersToBarbers ");
