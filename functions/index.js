@@ -432,77 +432,117 @@ function assignCustomersToBarbers(aShop, barberQueues, sortedListOfBarbers, sort
 }
 
 function updateWaitingTimes(aShopKey) {
-    
-    db.ref("barberWaitingQueues/"+aShopKey+"_"+today).once("value", (shop) => {
-        
-         new Promise( (resolve, reject) => {
-
-            return db.ref("shopDetails/"+aShopKey).once("value", (snapshot) => {
-                        return resolve(snapshot.child("avgTimeToCut").val());
-                });
-
-
+    console.log("Updating times: aShopKey: "+JSON.stringify(aShopKey));
+    return db.ref("barberWaitingQueues/"+aShopKey+"_"+today).once("value")
+    .then((shop) => {
+        var avgTimeToCut = db.ref("shopDetails/"+aShopKey).once("value")
+            .then((aShopDetail) => {
+                console.log("Updating times: aShopDetail avgTimeToCut: "+JSON.stringify(aShopDetail));
+                console.log("Updating times: aShopDetail avgTimeToCut: "+JSON.stringify(aShopDetail.child("avgTimeToCut").val()));
+                return aShopDetail.child("avgTimeToCut").val();
             })
-            .then( (avgTimeToCut) => {
+            .catch((error) => {
+                  throw error;
+              });
+//                return db.ref("shopDetails/"+aShopKey).once("value").child("avgTimeToCut").val();
+//            })
+        return Promise.all([shop, avgTimeToCut]);
 
-                shop.forEach((barber) => {
-                    //here we need to update the timings
-                    var inQueueCustomers = new Array();
-                    var inProgressCustomer;
-                    var inProgressCustomerServiceStartTime;
+    })
+    .then( (promiseReceived) => {
+        var shop = promiseReceived[0];
+        var avgTimeToCut = promiseReceived[1];
+        console.log("Updating times: shop: "+JSON.stringify(shop));
+        console.log("Updating times: avgTimeToCut: "+JSON.stringify(avgTimeToCut));
+        console.log("Updating times: shop.length: "+JSON.stringify(shop.length));
+//        for(var i = 0; i < shop.length; i++) {
+//            var barber = shop[i];
+
+        shop.forEach((barber) => {
+            console.log("Updating times: barber: "+JSON.stringify(barber));
+
+            //here we need to update the timings
+            var inQueueCustomers = new Array();
+            var inProgressCustomer;
+            var inProgressCustomerServiceStartTime;
 
 
-                    barber.forEach((customer) => {
-                        var custStatus = customer.child("status").val();
-                         if (Object.exists(custStatus) && custStatus === "PROGRESS") {
-                             inProgressCustomer = customer;
-                             inProgressCustomerServiceStartTime = customer.child("serviceStartTime").val();
-                         } else if (Object.exists(custStatus) && custStatus === "QUEUE") {
-                              inQueueCustomers.push(customer);
-                         }
-                    })
-                    //Here is the main logic
-                    if(Object.exists(inQueueCustomers)) {
-                        inQueueCustomers = inQueueCustomers.sort(CustomerComparator);
-                    }
+            barber.forEach((customer) => {
+            console.log("Updating times:  barber.length: "+JSON.stringify( barber.length));
 
-                    var prevCustomerTime = 0;
-                    for(var i = 0 ; i < inQueueCustomers.length ; i++) {
-                        var customer = inQueueCustomers[i];
-                        var newTimeToWait;
+//            for(var j = 0; j < barber.length; j++) {
+//                var customer = barber[j];
+                console.log("Updating times:  customer: "+JSON.stringify( customer));
 
-                        if ( i === 0 ) {
-                            //first customer
-                            if(Object.exists(inProgressCustomer) && Object.exists(inProgressCustomerServiceStartTime)) {
-                                //first customer in progress
-                                var currentTimeInMiliSeconds = moment().utcOffset('+0100').valueOf();
-                                var timeToWait = avgTimeToCut - ((currentTimeInMiliSeconds - inProgressCustomerServiceStartTime)/60000);
-                                newTimeToWait = Math.max(0, timeToWait);
-                            } else {
-                                //first customer not in progress
-                                newTimeToWait = 0;
-                            }
-                            prevCustomerTime = newTimeToWait;
+                var custStatus = customer.child("status").val();
+                console.log("Updating times:  custStatus: "+JSON.stringify( custStatus));
+                 if (Object.exists(custStatus) && custStatus === "PROGRESS") {
+                     inProgressCustomer = customer;
+                     console.log("Updating times:  inProgressCustomer: "+JSON.stringify( inProgressCustomer));
 
-                        } else {
-                            //Not the first customer
-                            newTimeToWait = prevCustomerTime + avgTimeToCut;
-                            prevCustomerTime = newTimeToWait;
+                     inProgressCustomerServiceStartTime = customer.child("serviceStartTime").val();
+                      console.log("Updating times:  inProgressCustomerServiceStartTime: "+JSON.stringify( inProgressCustomerServiceStartTime));
 
-                        }
-                        if(Object.exists(newTimeToWait)) {
-                            customer.ref.child("expectedWaitingTime").set(newTimeToWait);
-                        }
-                    }
+                 } else if (Object.exists(custStatus) && custStatus === "QUEUE") {
+                      inQueueCustomers.push(customer);
+                    console.log("Updating times:  inProgressCustomerServiceStartTime: "+JSON.stringify( inQueueCustomers));
 
-                 });
-                 return true;
-            }).catch((error) => {
-                console.log(error);
+                 }
             });
+            //Here is the main logic
+            if(Object.exists(inQueueCustomers)) {
+                inQueueCustomers = inQueueCustomers.sort(CustomerComparator);
+                console.log("Updating times:  after sort inQueueCustomers : "+JSON.stringify( inQueueCustomers));
 
+            }
 
+            var prevCustomerTime = 0;
+            console.log("Updating times:  inQueueCustomers.length : "+JSON.stringify( inQueueCustomers.length));
+
+            for(var i = 0 ; i < inQueueCustomers.length ; i++) {
+                var customer = inQueueCustomers[i];
+                var newTimeToWait;
+
+                if ( i === 0 ) {
+                    //first customer
+                    console.log("Updating times:  i === 0  customer : "+JSON.stringify( customer));
+
+                    if(Object.exists(inProgressCustomer) && Object.exists(inProgressCustomerServiceStartTime)) {
+                        //first customer in progress
+                        var currentTimeInMiliSeconds = moment().utcOffset('+0100').valueOf();
+                        var timeToWait = avgTimeToCut - ((currentTimeInMiliSeconds - inProgressCustomerServiceStartTime)/60000);
+                        timeToWait = timeToWait.toFixed(0);
+                        newTimeToWait = Math.max(0, timeToWait);
+                    } else {
+                        //first customer not in progress
+                        newTimeToWait = 0;
+                    }
+                    prevCustomerTime = newTimeToWait;
+                    console.log("Updating times: newTimeToWait : "+JSON.stringify( newTimeToWait));
+                } else {
+                    //Not the first customer
+                    newTimeToWait = prevCustomerTime + avgTimeToCut;
+                    prevCustomerTime = newTimeToWait;
+                    console.log("Updating times: prevCustomerTime : "+JSON.stringify( prevCustomerTime));
+                }
+                console.log("Updating times: newTimeToWait : "+JSON.stringify( newTimeToWait));
+
+                if(Object.exists(newTimeToWait)) {
+                console.log("Updating times: before expectedWaitingTime customer: "+JSON.stringify( customer));
+                    customer.ref.child("expectedWaitingTime").set(newTimeToWait);
+                console.log("Updating times: before expectedWaitingTime customer: "+JSON.stringify( customer));
+
+                }
+            }
+
+         });
+         return true;
+    }).catch((error) => {
+        console.log(error);
     });
+
+
+
 
 return true;
 }
@@ -514,9 +554,9 @@ return true;
 //return
 db.ref("shopDetails").once("value", (snapshot) => {
     snapshot.forEach((aShop) => {
-    if(aShop.key !== "-M5hCL0DhhMJ9TM8jB0j") {
-        return false;
-    }
+//    if(aShop.key !== "-M5hCL0DhhMJ9TM8jB0j") {
+//        return false;
+//    }
     try {
         console.log("["+aShop.key+"] "+"Fetching shop avg time");
         var sShopAvgTimeToCut = aShop.child("avgTimeToCut").val();
@@ -525,11 +565,11 @@ db.ref("shopDetails").once("value", (snapshot) => {
         console.log("["+aShop.key+"] "+"Starting transaction for shop : "+aShop.key +" Today : "+today);
         var shopQueuesReference = db.ref("barberWaitingQueues/"+aShop.key+"_"+today);
         shopQueuesReference.transaction((shopQueuesJSON) => {
-        console.log("["+aShop.key+"] "+"first thing in the transaction - Shop Key : "+aShop.key)
-        if (shopQueuesJSON !== null) {
-            console.log("["+aShop.key+"] "+"json returned null");
-            return ; //abort transaction
-        } else {
+            console.log("["+aShop.key+"] "+"first thing in the transaction - Shop Key : "+aShop.key)
+            if (shopQueuesJSON !== null) {
+                console.log("["+aShop.key+"] "+"json returned null");
+                return ; //abort transaction
+            } else {
             //Performe re-allocation
             console.log("["+aShop.key+"] "+"Starting re-allocation of customers" + aShop.key);
 //            return new Promise(function (resolve, reject, aShop) {
@@ -591,8 +631,13 @@ db.ref("shopDetails").once("value", (snapshot) => {
             var shopSnapshotInJSON = assignCustomersToBarbers(promiseShop, barberQueues, barberSortedList, allQueuedCustomerSorted);
             return Promise.all([promiseShop, shopSnapshotInJSON]);
             })
-            .then(() => {
-                return db.ref("barberWaitingQueues").child(aShop.key+"_"+today).toJSON();
+//            .then(() => {
+//                console.log("Final Step");
+//                return db.ref("barberWaitingQueues").child(aShop.key+"_"+today).toJSON();
+//            })
+            .then((promiseReceived) => {
+                console.log("Final Shop Data: "+JSON.stringify(promiseReceived[0]));
+                return updateWaitingTimes(promiseReceived[0].key);
             })
             .catch( (error) => {
                 console.log("Error while transaction execution: "+error); // 'Some terrrrible error.'
@@ -602,7 +647,7 @@ db.ref("shopDetails").once("value", (snapshot) => {
             }
         },
         (error, committed, aShop) => {
-
+          console.log("Finished transaction");
           if (error) {
             console.log('Transaction failed abnormally!', error);
           } else if (!committed) {
