@@ -178,7 +178,6 @@ function getCustomerTime (customer) {
     } else {
         return 0;
     }
-    
 }
 function CustomerComparator(customer1, customer2) {
     var c1Time = getCustomerTime(customer1);
@@ -192,6 +191,40 @@ function CustomerComparator(customer1, customer2) {
         return -1;
     }
 }
+
+function getCustomerTimeSNAP (customer) {
+    var customerArrivalTime = customer.child("arrivalTime").val();
+
+    var customerDragTime = customer.child("dragAdjustedTime").val();
+
+    if(Object.exists(customerArrivalTime)) {
+        if(Object.exists(customerDragTime)) {
+            if(customerDragTime === 0) {
+                return customerArrivalTime;
+            } else {
+                return customerDragTime;
+            }
+        } else {
+            return customerArrivalTime;
+        }
+    } else {
+        return 0;
+    }
+}
+
+function INCustomerComparator(customer1, customer2) {
+     var c1Time = getCustomerTimeSNAP(customer1);
+     var c2Time = getCustomerTimeSNAP(customer2);
+
+     if(c1Time > c2Time) {
+         return 1;
+     } else if (c1Time === c2Time) {
+         return 0;
+     } else {
+         return -1;
+     }
+}
+
 
 Object.exists = function(obj) {
     return typeof obj !== "undefined" && obj !== null;
@@ -454,7 +487,6 @@ function updateWaitingTimes(aShopKey) {
         var avgTimeToCut = promiseReceived[1];
         console.log("Updating times: shop: "+JSON.stringify(shop));
         console.log("Updating times: avgTimeToCut: "+JSON.stringify(avgTimeToCut));
-        console.log("Updating times: shop.length: "+JSON.stringify(shop.length));
 //        for(var i = 0; i < shop.length; i++) {
 //            var barber = shop[i];
 
@@ -468,13 +500,16 @@ function updateWaitingTimes(aShopKey) {
 
 
             barber.forEach((customer) => {
-            console.log("Updating times:  barber.length: "+JSON.stringify( barber.length));
-
-//            for(var j = 0; j < barber.length; j++) {
-//                var customer = barber[j];
+                if(!Object.exists(customer)) {
+                    return;
+                }
                 console.log("Updating times:  customer: "+JSON.stringify( customer));
-
                 var custStatus = customer.child("status").val();
+                if(!Object.exists(custStatus)) {
+                    return;
+                }
+
+
                 console.log("Updating times:  custStatus: "+JSON.stringify( custStatus));
                  if (Object.exists(custStatus) && custStatus === "PROGRESS") {
                      inProgressCustomer = customer;
@@ -491,7 +526,7 @@ function updateWaitingTimes(aShopKey) {
             });
             //Here is the main logic
             if(Object.exists(inQueueCustomers)) {
-                inQueueCustomers = inQueueCustomers.sort(CustomerComparator);
+                inQueueCustomers = inQueueCustomers.sort(INCustomerComparator);
                 console.log("Updating times:  after sort inQueueCustomers : "+JSON.stringify( inQueueCustomers));
 
             }
@@ -528,9 +563,9 @@ function updateWaitingTimes(aShopKey) {
                 console.log("Updating times: newTimeToWait : "+JSON.stringify( newTimeToWait));
 
                 if(Object.exists(newTimeToWait)) {
-                console.log("Updating times: before expectedWaitingTime customer: "+JSON.stringify( customer));
+                    console.log("Updating times: before expectedWaitingTime customer: "+JSON.stringify( customer));
                     customer.ref.child("expectedWaitingTime").set(newTimeToWait);
-                console.log("Updating times: before expectedWaitingTime customer: "+JSON.stringify( customer));
+                    console.log("Updating times: before expectedWaitingTime customer: "+JSON.stringify( customer));
 
                 }
             }
