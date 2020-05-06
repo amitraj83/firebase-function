@@ -593,12 +593,16 @@ db.ref("shopDetails").once("value", (snapshot) => {
 //        return false;
 //    }
     try {
-        console.log("["+aShop.key+"] "+"Fetching shop avg time");
         var sShopAvgTimeToCut = aShop.child("avgTimeToCut").val();
-        console.log("["+aShop.key+"] "+"Fetched shop avg time");
         //transaction starts here on a shop
-        console.log("["+aShop.key+"] "+"Starting transaction for shop : "+aShop.key +" Today : "+today);
+        db.ref("barberWaitingQueues/"+aShop.key+"_"+today)
+        .once("value")
+        .then(function(dataSnapshot) {
+            console.log("Children Count: "+dataSnapshot.hasChildren());
+            if (dataSnapshot.hasChildren() === true) {
+
         var shopQueuesReference = db.ref("barberWaitingQueues/"+aShop.key+"_"+today);
+        console.log("["+aShop.key+"] "+"Starting transaction for shop : "+aShop.key +" Today : "+today);
         shopQueuesReference.transaction((shopQueuesJSON) => {
             console.log("["+aShop.key+"] "+"first thing in the transaction - Shop Key : "+aShop.key)
             if (shopQueuesJSON !== null) {
@@ -682,23 +686,25 @@ db.ref("shopDetails").once("value", (snapshot) => {
             }
         },
         (error, committed, aShop) => {
-          console.log("Finished transaction");
           if (error) {
             console.log('Transaction failed abnormally!', error);
           } else if (!committed) {
             console.log('We aborted the transaction.'+committed);
           } else {
-            console.log('Transaction successful. Updating waiting times now');
-            console.log("Shop data to update : "+JSON.stringify(aShop));
+            console.log('Transaction successful.');
+
             //updateWaitingTimes(aShop[0].key);
           }
 
         });
 
-        } catch(e) {
-            console.log("Exception for shop - "+aShop.key);
-        }
-
+            }
+         return true;
         });
+    } catch(e) {
+        console.log("Exception for shop - "+aShop.key+" Error - "+e);
+    }
+
     });
+});
 //});
