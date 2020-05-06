@@ -446,7 +446,7 @@ function assignCustomersToBarbers(aShop, barberQueues, sortedListOfBarbers, sort
                      });
                 }
 
-
+                return true;
 
 
             })
@@ -579,7 +579,7 @@ function updateWaitingTimes(aShopKey) {
 
 
 
-return true;
+
 }
 
 
@@ -700,6 +700,9 @@ db.ref("shopDetails").once("value", (snapshot) => {
 
             }
          return true;
+        })
+        .catch(e => {
+            console.log("Exception for shop Datasnapshot - "+aShop.key+" Error - "+e);
         });
     } catch(e) {
         console.log("Exception for shop - "+aShop.key+" Error - "+e);
