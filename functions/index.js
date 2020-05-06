@@ -583,7 +583,7 @@ function updateWaitingTimes(aShopKey) {
 }
 
 
-//exports.scheduledFunction = functions.pubsub.schedule('every 1 minutes').onRun((context) => {
+exports.scheduledFunction = functions.pubsub.schedule('every 1 minutes').onRun((context) => {
 //Following should run for each shop
 
 //return
@@ -710,4 +710,5 @@ db.ref("shopDetails").once("value", (snapshot) => {
 
     });
 });
-//});
+return true;
+});
