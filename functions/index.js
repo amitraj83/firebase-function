@@ -32,10 +32,6 @@ const today = moment(date).utcOffset('+0100').format('DDMMYYYY');
 
 exports.sendNotifications = functions.pubsub.schedule('every 1 minutes').onRun((context) => {
 
-//var date = new Date();
-//const today = moment(date).utcOffset('+0100').format('DDMMYYYY');
-
-//var ref = db.ref("/Customers/t60nZazByXZczXt1rBat0whcVGJ3/notificationFirebaseToken");
 var ref = db.ref("barberWaitingQueues");
 
 
@@ -232,17 +228,11 @@ Object.exists = function(obj) {
 
 
 function barberWithStatus(aShop) {
-    console.log("["+aShop.key+"] "+"in barberwithstatus: aShop - "+aShop);
-//    var aShop = promiseReceived[0];
     return db.ref("barbers/"+aShop.key).once("value").then( (snapshot) => {
                                     var statuses = {};
-                                    console.log("["+aShop.key+"] "+"in barberwithstatus: aShop - "+snapshot.key);
                                      snapshot.forEach((barber) => {
-                                        console.log("["+aShop.key+"] "+"in barberwithstatus: barber - "+barber.key);
-                                        console.log("["+aShop.key+"] "+"in barberwithstatus: barber queue status - "+barber.child("queueStatus").val());
                                         statuses[barber.key] = barber.child("queueStatus").val();
                                      });
-                                     console.log("["+aShop.key+"] "+"in barberwithstatus: statuses - "+JSON.stringify(statuses));
                                      return (statuses);
                                  })
                                  .catch((error) => {
@@ -250,21 +240,15 @@ function barberWithStatus(aShop) {
                                  });
 
 
-//    return Promise.all(statusesPromise);
 }
 
 function listOfBarberQueues(aShop, barberStatuses) {
-//    var aShop = promiseReceived[0];
-    console.log("["+aShop.key+"] "+"waiting queue ref : "+aShop.key+"_"+today);
     return db.ref("barberWaitingQueues/"+aShop.key+"_"+today).once("value")
                 .then( (snapshot) => {
                 var barberQueues = new Array();
                  snapshot.forEach((barber) => {
-                    console.log("["+aShop.key+"] "+"listOfBarberQueues => barber key : "+barber.key);
                      var avgTimeToCut = aShop.child("avgTimeToCut").val();
-                     console.log("["+aShop.key+"] "+"listOfBarberQueues => avgTimeToCut : "+avgTimeToCut);
                      var status = barberStatuses[barber.key];
-                     console.log("["+aShop.key+"] "+"listOfBarberQueues => status : "+status);
                      var barberQueue = new BarberQueue(barber.key, aShop.key, status, avgTimeToCut);
                      barberQueues.push(barberQueue);
                      barber.forEach((customer) => {
@@ -272,28 +256,19 @@ function listOfBarberQueues(aShop, barberStatuses) {
 
                      })
                  });
-//                console.log("["+aShop.key+"] "+"in ListofBarberQueues - return -> "+JSON.stringify(barberQueues));
                 return (barberQueues);
             })
             .catch((error) => {
                 console.log("["+aShop.key+"] "+"in ListofBarberQueues - error -> "+error);
             });
 
-
-//    return Promise.all([promiseReceived]);
 }
 
 function barberSortedList(aShop, barberQueues) {
-//    var aShop = promiseReceived[0];
-    //Filter out barbers who are stopped
-    //return the list of barbers sorted by time to become avaialble
-//    var barberQueues = promiseReceived[2];
-//    console.log("["+aShop.key+"] "+"In Barber queues : "+JSON.stringify(barberQueues));
 
     var listBarberSorted = new Array();
     barberQueues.forEach(barberQueue => {
         var barberStatus = barberQueue.getStatus();
-//        console.log("["+aShop.key+"] "+"In Barber queues => barberQueue: "+JSON.stringify(barberQueue));
         if (barberStatus !== "STOP") {
             //Calculate time for a barber to become available
             var remainingMinsToComplete = 0;
@@ -318,49 +293,24 @@ function barberSortedList(aShop, barberQueues) {
         }
     });
     return listBarberSorted.sort(CompareForBarberSorted);
-
-//    return Promise.all(promiseReceived);
 }
 
 function removeAndGetAllCustomerToBeAddedLater(aShop, barberQueues, barberSortedList ) {
 //All Customer in the queue should be removed and put in a set.
-//    var aShop = promiseReceived[0];
-
 
     return new Promise((resolve, reject) => {
         var allQueuedCustomerSorted = new Array();
         var eachPromises = new Array();
-        //    var barberQueues = promiseReceived[2];
-//        console.log("[REMOVEANDSORT] barberQueues: " + JSON.stringify(barberQueues));
             barberQueues.forEach(barberQueue => {
                 if (Object.exists(barberQueue)) {
-                    console.log("[REMOVEANDSORT] barber key: " + barberQueue.getKey());
                     barberQueue.getCustomers().forEach(customer => {
                         if (Object.exists(customer)) {
-                            console.log("[REMOVEANDSORT] -- customer key" + customer.key);
-                            console.log("[REMOVEANDSORT] -- customer key status " + customer.child("status").val());
                             if (customer.child("status").val() === "QUEUE") {
-                                console.log("[REMOVEANDSORT] --- In Queue customer key" + customer.key);
-                                console.log("[REMOVEANDSORT] --- barberQueue.getShopKey " + barberQueue.getShopKey());
                                 var custInJSON = customer.toJSON();
                                 allQueuedCustomerSorted.push(custInJSON);
                                 db.ref("barberWaitingQueues").child(barberQueue.getShopKey()+"_"+today)
                                                                             .child(barberQueue.getKey()).child(customer.key)
                                                                             .ref.remove();
-                                /*eachPromises.push(
-                                    new Promise((resolve, reject) => {
-                                    return db.ref("barberWaitingQueues").child(barberQueue.getShopKey()+"_"+today)
-                                            .child(barberQueue.getKey()).child(customer.key)
-                                            .ref.remove();
-
-//                                            .ref.remove(() => {
-//                                                console.log("Remove succeeded for "+customer.key);
-//                                                allQueuedCustomerSorted.push(custInJSON);
-//                                                console.log("[REMOVEANDSORT] --- sorted allQueuedCustomerSorted " + JSON.stringify(allQueuedCustomerSorted));
-//                                                resolve(allQueuedCustomerSorted);
-//                                            }) ;
-                                    })
-                                )*/
 
                             }
                         }
@@ -370,13 +320,6 @@ function removeAndGetAllCustomerToBeAddedLater(aShop, barberQueues, barberSorted
             });
         return Promise.all([allQueuedCustomerSorted]);
     })
-//    .then((tempSortedCustomer) => {
-//        console.log("In THEN Clause tempSortedCustomer : "+JSON.stringify(tempSortedCustomer));
-//        var allQueuedCustomerSorted = tempSortedCustomer[1];
-//        console.log("In THEN Clause : "+JSON.stringify(allQueuedCustomerSorted));
-//        var finalSortedArray =  allQueuedCustomerSorted.sort(CustomerComparator);
-//        return Promise.all([finalSortedArray]);
-//    })
     .catch((error) => {
         console.log("Error while removeAndGetAllCustomerToBeAddedLater: "+error)
     });
@@ -384,22 +327,11 @@ function removeAndGetAllCustomerToBeAddedLater(aShop, barberQueues, barberSorted
 }
 
 
-//    return Promise.all(promiseReceived);
-
-
 function assignCustomersToBarbers(aShop, barberQueues, sortedListOfBarbers, sortedListOfCustomer) {
 
     var sequence = Promise.resolve();
 
-
-
-
-
-
-
-
         var placeInQueue = 1;
-        //var allPromises = array;
         sortedListOfCustomer.forEach(customer => {
 
             sequence = sequence
@@ -409,14 +341,10 @@ function assignCustomersToBarbers(aShop, barberQueues, sortedListOfBarbers, sort
                 if(Object.exists(customer) && Object.exists(customer.anyBarber) && customer.anyBarber === true) {
                 console.log("["+aShop.key+"] "+"To select sortedListOfBarbers - "+JSON.stringify(sortedListOfBarbers));
                     barberKey = sortedListOfBarbers[0].getKey();
-                    console.log("["+aShop.key+"] "+"in assignCustomersToBarbers => any barber key "+JSON.stringify(barberKey));
                 } else {
                     barberKey = customer.preferredBarberKey;
-                    console.log("["+aShop.key+"] "+"in assignCustomersToBarbers => preferred barber key "+JSON.stringify(barberKey));
                 }
                 if (Object.exists(barberKey) && barberKey !== "") {
-                console.log("["+aShop.key+"] "+"in assignCustomersToBarbers => barber key "+JSON.stringify(barberKey));
-                console.log("["+aShop.key+"] "+"in assignCustomersToBarbers => customer  "+JSON.stringify(customer));
 
                      return db.ref("barberWaitingQueues").child(aShop.key+"_"+today).child(barberKey)
                      .child(customer.key)
@@ -424,18 +352,15 @@ function assignCustomersToBarbers(aShop, barberQueues, sortedListOfBarbers, sort
                     .then(() => {
                         console.log("["+aShop.key+"] "+"1 - sortedListOfBarbers : "+JSON.stringify(sortedListOfBarbers));
                         for(var i = 0 ; i < sortedListOfBarbers.length ; i++) {
-                            console.log("["+aShop.key+"] "+"1 - sortedListOfBarbers : "+JSON.stringify(sortedListOfBarbers));
                             var sortedBarber = sortedListOfBarbers[i];
                             if(sortedBarber.getKey() === barberKey) {
                                 sortedBarber.setTimeToGetAvaialble(sortedBarber.getTimeToGetAvaialble() + sortedBarber.getAvgServiceTime());
-                                console.log("["+aShop.key+"] "+"1 - sortedListOfBarbers : "+JSON.stringify(sortedListOfBarbers));
                             }
                         }
                         return sortedListOfBarbers.sort(CompareForBarberSorted);
 
                      })
                      .then((sortedListOfBarbers) => {
-                        console.log("["+aShop.key+"] "+"Next - sortedListOfBarbers : "+JSON.stringify(sortedListOfBarbers));
                         return db.ref("barberWaitingQueues").child(aShop.key+"_"+today).child(barberKey)
                                      .child(customer.key)
                                      .child("timeAdded").set(placeInQueue++);
@@ -470,25 +395,17 @@ function updateWaitingTimes(aShopKey) {
     .then((shop) => {
         var avgTimeToCut = db.ref("shopDetails/"+aShopKey).once("value")
             .then((aShopDetail) => {
-                console.log("Updating times: aShopDetail avgTimeToCut: "+JSON.stringify(aShopDetail));
-                console.log("Updating times: aShopDetail avgTimeToCut: "+JSON.stringify(aShopDetail.child("avgTimeToCut").val()));
                 return aShopDetail.child("avgTimeToCut").val();
             })
             .catch((error) => {
                   throw error;
               });
-//                return db.ref("shopDetails/"+aShopKey).once("value").child("avgTimeToCut").val();
-//            })
         return Promise.all([shop, avgTimeToCut]);
 
     })
     .then( (promiseReceived) => {
         var shop = promiseReceived[0];
         var avgTimeToCut = promiseReceived[1];
-        console.log("Updating times: shop: "+JSON.stringify(shop));
-        console.log("Updating times: avgTimeToCut: "+JSON.stringify(avgTimeToCut));
-//        for(var i = 0; i < shop.length; i++) {
-//            var barber = shop[i];
 
         shop.forEach((barber) => {
             console.log("Updating times: barber: "+JSON.stringify(barber));
@@ -503,36 +420,28 @@ function updateWaitingTimes(aShopKey) {
                 if(!Object.exists(customer)) {
                     return;
                 }
-                console.log("Updating times:  customer: "+JSON.stringify( customer));
                 var custStatus = customer.child("status").val();
                 if(!Object.exists(custStatus)) {
                     return;
                 }
 
 
-                console.log("Updating times:  custStatus: "+JSON.stringify( custStatus));
                  if (Object.exists(custStatus) && custStatus === "PROGRESS") {
                      inProgressCustomer = customer;
-                     console.log("Updating times:  inProgressCustomer: "+JSON.stringify( inProgressCustomer));
 
                      inProgressCustomerServiceStartTime = customer.child("serviceStartTime").val();
-                      console.log("Updating times:  inProgressCustomerServiceStartTime: "+JSON.stringify( inProgressCustomerServiceStartTime));
 
                  } else if (Object.exists(custStatus) && custStatus === "QUEUE") {
                       inQueueCustomers.push(customer);
-                    console.log("Updating times:  inProgressCustomerServiceStartTime: "+JSON.stringify( inQueueCustomers));
 
                  }
             });
             //Here is the main logic
             if(Object.exists(inQueueCustomers)) {
                 inQueueCustomers = inQueueCustomers.sort(INCustomerComparator);
-                console.log("Updating times:  after sort inQueueCustomers : "+JSON.stringify( inQueueCustomers));
-
             }
 
             var prevCustomerTime = 0;
-            console.log("Updating times:  inQueueCustomers.length : "+JSON.stringify( inQueueCustomers.length));
 
             for(var i = 0 ; i < inQueueCustomers.length ; i++) {
                 var customer = inQueueCustomers[i];
@@ -540,7 +449,6 @@ function updateWaitingTimes(aShopKey) {
 
                 if ( i === 0 ) {
                     //first customer
-                    console.log("Updating times:  i === 0  customer : "+JSON.stringify( customer));
 
                     if(Object.exists(inProgressCustomer) && Object.exists(inProgressCustomerServiceStartTime)) {
                         //first customer in progress
@@ -553,19 +461,14 @@ function updateWaitingTimes(aShopKey) {
                         newTimeToWait = 0;
                     }
                     prevCustomerTime = newTimeToWait;
-                    console.log("Updating times: newTimeToWait : "+JSON.stringify( newTimeToWait));
                 } else {
                     //Not the first customer
                     newTimeToWait = prevCustomerTime + avgTimeToCut;
                     prevCustomerTime = newTimeToWait;
-                    console.log("Updating times: prevCustomerTime : "+JSON.stringify( prevCustomerTime));
                 }
-                console.log("Updating times: newTimeToWait : "+JSON.stringify( newTimeToWait));
 
                 if(Object.exists(newTimeToWait)) {
-                    console.log("Updating times: before expectedWaitingTime customer: "+JSON.stringify( customer));
                     customer.ref.child("expectedWaitingTime").set(newTimeToWait);
-                    console.log("Updating times: before expectedWaitingTime customer: "+JSON.stringify( customer));
 
                 }
             }
@@ -586,12 +489,8 @@ function updateWaitingTimes(aShopKey) {
 exports.scheduledFunction = functions.pubsub.schedule('every 1 minutes').onRun((context) => {
 //Following should run for each shop
 
-//return
 db.ref("shopDetails").once("value", (snapshot) => {
     snapshot.forEach((aShop) => {
-//    if(aShop.key !== "-M5hCL0DhhMJ9TM8jB0j") {
-//        return false;
-//    }
     try {
         var sShopAvgTimeToCut = aShop.child("avgTimeToCut").val();
         //transaction starts here on a shop
@@ -602,43 +501,27 @@ db.ref("shopDetails").once("value", (snapshot) => {
             if (dataSnapshot.hasChildren() === true) {
 
         var shopQueuesReference = db.ref("barberWaitingQueues/"+aShop.key+"_"+today);
-        console.log("["+aShop.key+"] "+"Starting transaction for shop : "+aShop.key +" Today : "+today);
         shopQueuesReference.transaction((shopQueuesJSON) => {
-            console.log("["+aShop.key+"] "+"first thing in the transaction - Shop Key : "+aShop.key)
             if (shopQueuesJSON !== null) {
                 console.log("["+aShop.key+"] "+"json returned null");
                 return ; //abort transaction
             } else {
             //Performe re-allocation
-            console.log("["+aShop.key+"] "+"Starting re-allocation of customers" + aShop.key);
-//            return new Promise(function (resolve, reject, aShop) {
-//              var promiseReceived = new Array();
-//              promiseReceived[0] = aShop;
-//              console.log("Returning first promise: "+aShop.key);
-//              resolve (promiseReceived);
-//            })
             return Promise.all([aShop]).then( (promiseReceived) => {
             var promiseShop = promiseReceived[0];
-            console.log("["+promiseShop.key+"] "+"executing barberWithStatus "+promiseReceived[0]);
-            console.log("["+promiseShop.key+"] "+"executing barberWithStatus shop key: "+promiseReceived[0].key);
             var barberStatusespromise = barberWithStatus(promiseShop);
-            //console.log("["+promiseShop.key+"] "+" barberStatusespromise "+JSON.stringify(barberStatusespromise));
             return Promise.all([promiseReceived[0], barberStatusespromise]);
             })
             .then( (promiseReceived) => {
             //real all data
             var promiseShop = promiseReceived[0];
             var barberStatuses = promiseReceived[1];
-            console.log("["+promiseShop.key+"] "+"executing listOfBarberQueues for shop - "+promiseReceived[0].key);
-            console.log("["+promiseShop.key+"] "+"barberStatuses - "+JSON.stringify(barberStatuses));
             return Promise.all([promiseShop, listOfBarberQueues(promiseShop, barberStatuses)]);
             })
             .then( (promiseReceived) => {
                 //sortedListOfBarbersForReAllocation
                 var promiseShop = promiseReceived[0];
                 var barberQueues = promiseReceived[1];
-                console.log("["+promiseShop.key+"] "+"executing barberSortedList ");
-//                console.log("["+promiseShop.key+"] "+"calling Barber queues : "+JSON.stringify(barberQueues));
                 if (Object.exists(barberQueues)) {
                    return Promise.all([promiseShop, barberQueues,  barberSortedList(promiseShop, barberQueues)]);
                 } else {
@@ -650,32 +533,20 @@ db.ref("shopDetails").once("value", (snapshot) => {
             var promiseShop = promiseReceived[0];
             var barberQueues = promiseReceived[1];
             var barberSortedList = promiseReceived[2];
-//            console.log("["+promiseShop.key+"] "+"calling removeAndGetAllCustomerToBeAddedLater => barberQueues"+JSON.stringify(barberQueues));
-//            console.log("["+promiseShop.key+"] "+"calling removeAndGetAllCustomerToBeAddedLater => barberSortedList"+JSON.stringify(barberSortedList));
             var tempPromise = removeAndGetAllCustomerToBeAddedLater(promiseShop, barberQueues, barberSortedList);
             return Promise.all([promiseShop, barberQueues, barberSortedList, tempPromise]);
             })
             .then( (promiseReceived) => {
             var promiseShop = promiseReceived[0];
-            console.log("["+promiseShop.key+"] "+"executing assignCustomersToBarbers 1 : "+JSON.stringify(promiseShop));
             var barberQueues = promiseReceived[1];
-            console.log("["+promiseShop.key+"] "+"executing assignCustomersToBarbers 2 : "+JSON.stringify(barberQueues));
             var barberSortedList = promiseReceived[2];
-            console.log("["+promiseShop.key+"] "+"executing assignCustomersToBarbers 3 : "+JSON.stringify(barberSortedList));
             var allQueuedCustomerSorted = promiseReceived[3];
             allQueuedCustomerSorted = allQueuedCustomerSorted.sort(CustomerComparator);
-             console.log("["+promiseShop.key+"] "+"calling assignCustomersToBarbers => allQueuedCustomerSorted"+JSON.stringify(allQueuedCustomerSorted));
             //assignCustomersToBarbers
-            console.log("["+promiseShop.key+"] "+"executing assignCustomersToBarbers ");
             var shopSnapshotInJSON = assignCustomersToBarbers(promiseShop, barberQueues, barberSortedList, allQueuedCustomerSorted);
             return Promise.all([promiseShop, shopSnapshotInJSON]);
             })
-//            .then(() => {
-//                console.log("Final Step");
-//                return db.ref("barberWaitingQueues").child(aShop.key+"_"+today).toJSON();
-//            })
             .then((promiseReceived) => {
-                console.log("Final Shop Data: "+JSON.stringify(promiseReceived[0]));
                 return updateWaitingTimes(promiseReceived[0].key);
             })
             .catch( (error) => {
