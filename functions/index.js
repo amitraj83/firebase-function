@@ -29,11 +29,11 @@ var date = new Date();
 
 const today = moment(date).utcOffset('+0100').format('DDMMYYYY');
 
-/*
-exports.scheduledFunction = functions.pubsub.schedule('every 1 minutes').onRun((context) => {
 
-var date = new Date();
-const today = moment(date).utcOffset('+0100').format('DDMMYYYY');
+exports.sendNotifications = functions.pubsub.schedule('every 1 minutes').onRun((context) => {
+
+//var date = new Date();
+//const today = moment(date).utcOffset('+0100').format('DDMMYYYY');
 
 //var ref = db.ref("/Customers/t60nZazByXZczXt1rBat0whcVGJ3/notificationFirebaseToken");
 var ref = db.ref("barberWaitingQueues");
@@ -101,7 +101,7 @@ return ref.once("value", function(snapshot) {
 });
 
 });
-*/
+
 
 function BarberQueue(key, shopKey, status, avgTimeToCut) {
     this.barberKey = key;
