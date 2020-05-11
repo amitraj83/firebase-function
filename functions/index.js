@@ -24,11 +24,12 @@ admin.initializeApp({
 firebase.initializeApp(config);
 
 var db = admin.database();
-var moment = require('moment');
+//var moment = require('moment');
 var date = new Date();
 
-const today = moment(date).utcOffset('+0100').format('DDMMYYYY');
-
+//const today = moment(date).utcOffset('+0100').format('DDMMYYYY');
+var moment = require('moment-timezone');
+const today = moment().tz("Europe/London").format('DDMMYYYY');
 
 exports.sendNotifications = functions.pubsub.schedule('every 1 minutes').onRun((context) => {
 
