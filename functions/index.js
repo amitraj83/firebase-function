@@ -65,10 +65,10 @@ return ref.once("value", function(snapshot) {
 
                                             admin.messaging().send(message)
                                             .then((response) => {
-                                                console.log('Successfully sent message for customer - '+customerSnapshot.key, response);
+                                                console.log('Successfully sent message for customer - '+customer.key, response);
                                                 return true;
                                             }).catch((error) => {
-                                                console.log('Error sending message for customer - '+customerSnapshot.key, error);
+                                                console.log('Error sending message for customer - '+customer.key, error);
                                             });
                                         }
                                     });
