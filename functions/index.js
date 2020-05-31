@@ -503,10 +503,11 @@ db.ref("shopDetails").once("value", (snapshot) => {
 
         var shopQueuesReference = db.ref("barberWaitingQueues/"+aShop.key+"_"+today);
         shopQueuesReference.transaction((shopQueuesJSON) => {
-            if (shopQueuesJSON !== null) {
-                console.log("["+aShop.key+"] "+"json returned null");
-                return ; //abort transaction
-            } else {
+//            if (shopQueuesJSON !== null) {
+//                console.log("["+aShop.key+"] "+"json returned null");
+//                return ; //abort transaction
+//            } else
+            {
             //Performe re-allocation
             return Promise.all([aShop]).then( (promiseReceived) => {
             var promiseShop = promiseReceived[0];
@@ -630,25 +631,23 @@ function assignOneCustomerToBarber(promiseShop, barberSorted,  customerKey, cust
     return db.ref("barberWaitingQueues").child(shopKey+"_"+today).child(barberKey)
     .once("value")
     .then( (barber) => {
-        var count = 0;
-        var sequence = Promise.resolve();
-        barber.forEach(customer => {
-            sequence = sequence
-            .then(() => {
-                if (customer.child("status").val().toUpperCase() === "QUEUE") {
-                    count++;
-                }
-                console.log("[assignOneCustomerToBarber] count: "+count);
-                return count;
-            })
-            .catch((error) => {
-                throw error;
-            });
-        });
-        return Promise.all([sequence, count]);
+        console.log("Num Children: "+ barber.numChildren());
+        var barberJSON = barber.toJSON();
+        var customerInQueue = 0;
+        for(var bJSON in barberJSON) {
+           console.log("Barber JSON : "+bJSON);
+           var status = barber.child(bJSON).child("status").val();
+           if (status === "QUEUE") {
+                console.log("Barber status : "+status);
+                customerInQueue++;
+           }
+
+        }
+        return customerInQueue;
     })
     .then((promiseReceived) => {
-        var customerCountInQueue = promiseReceived[1];
+        console.log("Num Children promiseReceived: "+ promiseReceived);
+        var customerCountInQueue = promiseReceived;
         console.log("[assignOneCustomerToBarber] customerCountInQueue: "+customerCountInQueue);
         if (Object.exists(barberKey) && barberKey !== "") {
             console.log("[assignOneCustomerToBarber] customerRef.key: "+customerRef.key);
@@ -716,10 +715,11 @@ return db.ref("shopDetails/"+shopKey).once("value")
 
             var shopQueuesReference = db.ref("barberWaitingQueues/"+aShop.key+"_"+today);
             shopQueuesReference.transaction((shopQueuesJSON) => {
-            if (shopQueuesJSON !== null) {
-                console.log("["+aShop.key+"] "+"json returned null");
-                return ; //abort transaction
-            } else {
+//            if (shopQueuesJSON !== null) {
+//                console.log("["+aShop.key+"] "+"json returned null");
+//                return shopQueuesJSON; //abort transaction
+//            } else
+             {
                 //Performe customer addition
                 return Promise.all([aShop]).then( (promiseReceived) => {
                 var promiseShop = promiseReceived[0];
