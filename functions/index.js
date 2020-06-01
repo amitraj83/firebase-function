@@ -497,8 +497,8 @@ try {
             console.log("Children Count: "+dataSnapshot.hasChildren());
             if (dataSnapshot.hasChildren() === true) {
 
-        var shopQueuesReference = db.ref("barberWaitingQueues/"+aShop.key+"_"+today);
-        shopQueuesReference.transaction((shopQueuesJSON) => {
+            var shopQueuesReference = db.ref("barberWaitingQueues/"+aShop.key+"_"+today);
+            shopQueuesReference.transaction((shopQueuesJSON) => {
 //            if (shopQueuesJSON !== null) {
 //                console.log("["+aShop.key+"] "+"json returned null");
 //                return ; //abort transaction
@@ -818,7 +818,7 @@ exports.queueCustomer = functions.https.onCall((data, context) => {
 
       return addCustomerEvent(customerName, customerKey, channel, shopKey, anyBarber)
                 .then(() => {
-                    db.ref("shopDetails/"+shopKey).once("value", (snapshot) => {
+                    return db.ref("shopDetails/"+shopKey).once("value", (snapshot) => {
                         snapshot.forEach((aShop) => {
                             reShuffleCustomerInOneShop (aShop);
                         });
@@ -829,9 +829,9 @@ exports.queueCustomer = functions.https.onCall((data, context) => {
                 });
 
   } else if (eventType.toUpperCase() === "PROGRESS_CUSTOMER") {
-        var shopKey = data.shopKey;
-        var barberKey = data.barberKey;
-        var customerKey = data.customerKey;
+        shopKey = data.shopKey;
+        barberKey = data.barberKey;
+        customerKey = data.customerKey;
 
          return db.ref("barberWaitingQueues/"+shopKey+"_"+today+"/"+barberKey)
          .once("value")
@@ -847,7 +847,7 @@ exports.queueCustomer = functions.https.onCall((data, context) => {
                }
             }
             if ( customerInQueue > 0 ) {
-                throw "Customer already in progress";
+                throw new Error("Customer already in progress");
             } else {
                 var sequence = Promise.resolve();
                 var customerRef = db.ref("barberWaitingQueues/"+shopKey+"_"+today+"/"+barberKey+"/"+customerKey);
@@ -874,9 +874,9 @@ exports.queueCustomer = functions.https.onCall((data, context) => {
 
 
   } else if (eventType.toUpperCase() === "DONE_CUSTOMER") {
-        var shopKey = data.shopKey;
-        var barberKey = data.barberKey;
-        var customerKey = data.customerKey;
+        shopKey = data.shopKey;
+        barberKey = data.barberKey;
+        customerKey = data.customerKey;
 
          return db.ref("barberWaitingQueues/"+shopKey+"_"+today+"/"+barberKey)
          .child(customerKey)
@@ -892,9 +892,9 @@ exports.queueCustomer = functions.https.onCall((data, context) => {
          .catch ( e => {console.log("Exception DONE_CUSTOMER - "+customerKey+" Error - "+e); throw e;});
 
   } else if (eventType.toUpperCase() === "REMOVE_CUSTOMER") {
-        var shopKey = data.shopKey;
-        var barberKey = data.barberKey;
-        var customerKey = data.customerKey;
+        shopKey = data.shopKey;
+        barberKey = data.barberKey;
+        customerKey = data.customerKey;
 
          return db.ref("barberWaitingQueues/"+shopKey+"_"+today+"/"+barberKey)
          .child(customerKey)
@@ -909,8 +909,14 @@ exports.queueCustomer = functions.https.onCall((data, context) => {
          })
          .catch ( e => {console.log("Exception REMOVE_CUSTOMER - "+customerKey+" Error - "+e); throw e;});
 
-  } else if (eventType.toUpperCase() === "ADD_BARBER") {
-
+  }
+  else if (eventType.toUpperCase() === "REALLOCATE") {
+        shopKey = data.shopKey;
+        return db.ref("shopDetails/"+shopKey).once("value", (snapshot) => {
+                snapshot.forEach((aShop) => {
+                    reShuffleCustomerInOneShop (aShop);
+                });
+            });
   }
 
 
