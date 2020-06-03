@@ -219,8 +219,10 @@ Object.exists = function (obj) {
 function barberWithStatus(shopKey) {
     return db.ref("barbers/" + shopKey).once("value").then((barbersSnapshot) => {
         var statuses = {};
+        console.log("Starting barberWithStatus for : "+shopKey);
         barbersSnapshot.forEach((barber) => {
             statuses[barber.key] = barber.child("queueStatus").val();
+            console.log("Starting barberWithStatus for barber: "+barber.key);
         });
         return (statuses);
     }).catch((error) => {
@@ -284,9 +286,10 @@ function shopKey(key) {
 
 exports.reAllocateCustomers = functions.pubsub.schedule('every 1 minutes').onRun((context) => {
     //Following should run for each shop
-
+    console.log("Starting reallocation");
     db.ref("shopDetails").once("value", (snapshot) => {
         snapshot.forEach((aShop) => {
+            console.log("Starting reallocation for : "+aShop.key);
             reShuffleCustomerInOneShop(aShop.key, aShop.child("avgTimeToCut").val());
         });
     });
@@ -506,7 +509,10 @@ function addCustomerEvent(customerName, customerKey, channel, shopKey, anyBarber
 
 exports.queueCustomer = functions.https.onCall((data, context) => {
     var eventType = data.eventType; //ADD_CUSTOMER, PROGRESS_CUSTOMER, DONE_CUSTOMER, REMOVE_CUSTOMER
-
+    console.log("Entered Queue Customer");
+    console.log("event type: "+eventType);
+    
+    
     if (eventType.toUpperCase() === "ADD_CUSTOMER") {
         var customerName = data.customerName;
         console.log("customerName : " + customerName);
@@ -531,7 +537,9 @@ exports.queueCustomer = functions.https.onCall((data, context) => {
                 console.log("3. Exception for shop - " + aShop.key + " Error - " + e);
             });
 
-    } else if (eventType.toUpperCase() === "PROGRESS_CUSTOMER") {
+    } 
+    
+    else if (eventType.toUpperCase() === "PROGRESS_CUSTOMER") {
         shopKey = data.shopKey;
         barberKey = data.barberKey;
         customerKey = data.customerKey;
@@ -614,14 +622,17 @@ exports.queueCustomer = functions.https.onCall((data, context) => {
 
     }
     else if (eventType.toUpperCase() === "REALLOCATE") {
+        console.log("Reallocate called");
         shopKey = data.shopKey;
         return db.ref("shopDetails/" + shopKey).once("value", (snapshot) => {
+            console.log("Rellocate for shopkey : "+shopKey);
             snapshot.forEach((aShop) => {
+                console.log("Rellocate for shopkey 2 : "+aShop.key);
                 reShuffleCustomerInOneShop(aShop.key, aShop.child("avgTimeToCut").val());
             });
         });
     }
-
+    return "Failure";
 
 
 });
@@ -748,7 +759,9 @@ function reShuffleCustomerInOneShop(shopId, shopAvgTimeToCut) {
     try {
         var barberStatusesPromise = barberWithStatus(shopId);
         Promise.all([barberStatusesPromise]).then((promisesReceived) => {
+            console.log("reShuffleCustomerInOneShop : "+promisesReceived);
             var barberStatuses = promisesReceived[0];
+            console.log("reShuffleCustomerInOneShop : "+barberStatuses);
             var shopQueuesReference = db.ref("barberWaitingQueues/" + shopKey(shopId));
             shopQueuesReference.transaction((shopQueuesObj) => {
                 console.log('inside transaction')
@@ -785,6 +798,7 @@ function reShuffleCustomerInOneShop(shopId, shopAvgTimeToCut) {
                     console.log('Transaction successful.');
                 }
             });
+            return true;
         }).catch((error) => {
             console.log("Exception reallocateCustomersInOneShop - " + shopKey(shopId) + " Error - " + error);
         });
