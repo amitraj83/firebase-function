@@ -228,28 +228,6 @@ function barberWithStatus(shopKey) {
     });
 }
 
-function listOfBarberQueues(aShop, barberStatuses) {
-    return db.ref("barberWaitingQueues/" + aShop.key + "_" + today).once("value")
-        .then((snapshot) => {
-            var barberQueues = new Array();
-            snapshot.forEach((barber) => {
-                var avgTimeToCut = aShop.child("avgTimeToCut").val();
-                var status = barberStatuses[barber.key];
-                var barberQueue = new BarberQueue(barber.key, aShop.key, status, avgTimeToCut);
-                barberQueues.push(barberQueue);
-                barber.forEach((customer) => {
-                    barberQueue.addCustomer(customer);
-
-                })
-            });
-            return (barberQueues);
-        })
-        .catch((error) => {
-            console.log("[" + aShop.key + "] " + "in ListofBarberQueues - error -> " + error);
-        });
-
-}
-
 function barberSortedList(barberQueues) {
 
     var listBarberSorted = new Array();
@@ -296,7 +274,7 @@ exports.reAllocateCustomers = functions.pubsub.schedule('every 1 minutes').onRun
 
 function CustomerObject(key, name, expectedWaitingTime, dragAdjustedTime, arrivalTime, serviceStartTime,
     actualProcessingTime, lastPositionChangedTime, status, preferredBarberKey,
-    placeInQueue, absent, channel, addedBy) {
+    placeInQueue, channel, addedBy) {
     this.key = key;
     this.name = name;
     this.expectedWaitingTime = expectedWaitingTime;
@@ -308,12 +286,11 @@ function CustomerObject(key, name, expectedWaitingTime, dragAdjustedTime, arriva
     this.status = status;
     this.preferredBarberKey = preferredBarberKey;
     this.placeInQueue = placeInQueue;
-    this.absent = absent;
     this.channel = channel;
     this.addedBy = addedBy;
 }
 
-function assignOneCustomerToBarber(queue, shopId, avgTimeToCut, barberKey, customerKey, customerName, channel) {
+function assignOneCustomerToBarber(queue, shopId, avgTimeToCut, barberKey, customerKey, customerName, channel, preferredBarberKey) {
     if (!Object.exists(customerKey) || customerKey === "") {
         customerKey = db.ref("barberWaitingQueues").child(shopKey(shopId)).child(barberKey).push().key;
         console.log("[assignOneCustomerToBarber] new customerKey : " + customerKey);
@@ -321,16 +298,17 @@ function assignOneCustomerToBarber(queue, shopId, avgTimeToCut, barberKey, custo
 
     var customerInQueue = 0;
     console.log(queue)
-    for (const [custId, customer] of  Object.entries(queue)) {
+    for (const [custId, customer] of Object.entries(queue)) {
         if (customer['status' === "QUEUE"]) {
             customerInQueue++;
         }
     }
-    var aCustomer = new CustomerObject(customerKey, customerName,
-        (avgTimeToCut * customerInQueue), 0, moment().tz("Europe/London").valueOf(),
-        0, 0, 0, "QUEUE", barberKey, customerInQueue, false, channel, customerKey);
+    const arrivalTime = moment().tz("Europe/London").valueOf();
+    var aCustomer = new CustomerObject(customerKey, customerName, 0, 0, arrivalTime,
+        0, 0, 0, "QUEUE", preferredBarberKey, customerInQueue, channel, customerKey);
     console.log("Customer added : " + JSON.stringify(aCustomer));
     queue[customerKey] = aCustomer;
+    updateWaitingTimeForAQueue(queue, avgTimeToCut);
 }
 
 exports.queueCustomer = functions.https.onCall((data, context) => {
@@ -387,7 +365,7 @@ function assignCustomersToBarbers(shopId, sortedListOfBarbers, sortedListOfCusto
     sortedListOfCustomer.forEach(customer => {
 
         var barberKey = "";
-        if (Object.exists(customer) && Object.exists(customer['anyBarber']) && customer['anyBarber'] === true) {
+        if (Object.exists(customer) && customer['preferredBarberKey'] === '') {
             console.log("[" + shopId + "] " + "To select sortedListOfBarbers - " + JSON.stringify(sortedListOfBarbers));
             barberKey = sortedListOfBarbers[0].getKey();
         } else {
@@ -412,60 +390,59 @@ function updateWaitingTimes(shopQueuesObj, avgTimeToCut) {
     var entries = Object.entries(shopQueuesObj);
     for (const [barberId, queue] of entries) {
         console.log("Updating times: barber: " + barberId);
-
-        //here we need to update the timings
-        var inQueueCustomers = new Array();
-        var inProgressCustomer;
-        var inProgressCustomerServiceStartTime;
-
-        var queueEntries = Object.entries(queue);
-        for (const [custId, customer] of queueEntries) {
-            var custStatus = customer['status'];
-            if (custStatus === "PROGRESS") {
-                inProgressCustomer = customer;
-                inProgressCustomerServiceStartTime = customer['serviceStartTime'];
-            } else if (custStatus === "QUEUE") {
-                inQueueCustomers.push(customer);
-            }
-        }
-
-        //Here is the main logic
-        if (Object.exists(inQueueCustomers)) {
-            inQueueCustomers = inQueueCustomers.sort(INCustomerComparator);
-        }
-
-        var prevCustomerTime = 0;
-
-        for (var i = 0; i < inQueueCustomers.length; i++) {
-            var customer = inQueueCustomers[i];
-            var newTimeToWait;
-
-            if (i === 0) {
-                //first customer
-
-                if (Object.exists(inProgressCustomer) && Object.exists(inProgressCustomerServiceStartTime)) {
-                    //first customer in progress
-                    var currentTimeInMiliSeconds = moment().utcOffset('+0100').valueOf();
-                    var timeToWait = avgTimeToCut - ((currentTimeInMiliSeconds - inProgressCustomerServiceStartTime) / 60000);
-                    timeToWait = timeToWait.toFixed(0);
-                    newTimeToWait = Math.max(0, timeToWait);
-                } else {
-                    //first customer not in progress
-                    newTimeToWait = 0;
-                }
-                prevCustomerTime = newTimeToWait;
-            } else {
-                //Not the first customer
-                newTimeToWait = prevCustomerTime + avgTimeToCut;
-                prevCustomerTime = newTimeToWait;
-            }
-
-            if (Object.exists(newTimeToWait)) {
-                customer['expectedWaitingTime'] = newTimeToWait;
-            }
-        }
+        updateWaitingTimeForAQueue(queue, avgTimeToCut);
     }
     console.log("Updating times: aShopKey: ");
+}
+
+function updateWaitingTimeForAQueue(queue, avgTimeToCut) {
+    var queueEntries = Object.entries(queue);
+    //here we need to update the timings
+    var inQueueCustomers = new Array();
+    var inProgressCustomer;
+    var inProgressCustomerServiceStartTime;
+    for (const [custId, customer] of queueEntries) {
+        var custStatus = customer['status'];
+        if (custStatus === "PROGRESS") {
+            inProgressCustomer = customer;
+            inProgressCustomerServiceStartTime = customer['serviceStartTime'];
+        }
+        else if (custStatus === "QUEUE") {
+            inQueueCustomers.push(customer);
+        }
+    }
+    //Here is the main logic
+    if (Object.exists(inQueueCustomers)) {
+        inQueueCustomers = inQueueCustomers.sort(INCustomerComparator);
+    }
+    var prevCustomerTime = 0;
+    for (var i = 0; i < inQueueCustomers.length; i++) {
+        var customer = inQueueCustomers[i];
+        var newTimeToWait;
+        if (i === 0) {
+            //first customer
+            if (Object.exists(inProgressCustomer) && Object.exists(inProgressCustomerServiceStartTime)) {
+                //first customer in progress
+                var currentTimeInMiliSeconds = moment().utcOffset('+0100').valueOf();
+                var timeToWait = avgTimeToCut - ((currentTimeInMiliSeconds - inProgressCustomerServiceStartTime) / 60000);
+                timeToWait = timeToWait.toFixed(0);
+                newTimeToWait = Math.max(0, timeToWait);
+            }
+            else {
+                //first customer not in progress
+                newTimeToWait = 0;
+            }
+            prevCustomerTime = newTimeToWait;
+        }
+        else {
+            //Not the first customer
+            newTimeToWait = prevCustomerTime + avgTimeToCut;
+            prevCustomerTime = newTimeToWait;
+        }
+        if (Object.exists(newTimeToWait)) {
+            customer['expectedWaitingTime'] = newTimeToWait;
+        }
+    }
 }
 
 function reShuffleCustomerInOneShop(shopId, shopAvgTimeToCut) {
@@ -476,7 +453,7 @@ function reShuffleCustomerInOneShop(shopId, shopAvgTimeToCut) {
             var barberStatuses = promisesReceived[0];
             var shopQueuesReference = db.ref("barberWaitingQueues/" + shopKey(shopId));
             shopQueuesReference.transaction((shopQueuesObj) => {
-                console.log('inside transaction')
+                console.log('inside transaction: reShuffleCustomerInOneShop')
                 if (!Object.exists(shopQueuesObj)) {
                     //no object received in this call, so ignore this call
                     console.log('shopQueuesObj no object received in this call, so ignore this call')
@@ -562,13 +539,26 @@ function addCustomerEvent(customerName, customerKey, channel, shopId, preferredB
     }).then((promisesReceived) => {
         var barberStatuses = promisesReceived[0];
         var avgTimeToCut = promisesReceived[1];
+        console.log('addCustomerEvent')
         var shopQueuesReference = db.ref("barberWaitingQueues/" + shopKey(shopId));
         shopQueuesReference.transaction((shopQueuesObj) => {
-            console.log('inside transaction')
+            console.log('inside transaction: addCustomerEvent');
             if (!Object.exists(shopQueuesObj)) {
-                //no object received in this call, so ignore this call
-                console.log('shopQueuesObj no object received in this call, so ignore this call')
-                return shopQueuesObj;
+                //shopQueues can be null if there is no customer and barber is online
+                var availableBarbers = {};
+                for (const [barberId, status] of Object.entries(barberStatuses)) {
+                    if (status !== 'STOP') {
+                        availableBarbers[barberId] = {};
+                    }
+                }
+                console.log(Object.keys(availableBarbers).length);
+                if (Object.keys(availableBarbers).length > 0) {
+                    shopQueuesObj = availableBarbers;
+                } else {
+                    //no object received in this call, so ignore this call
+                    console.log('shopQueuesObj no object received in this call, so ignore this call' + shopQueuesObj)
+                    return shopQueuesObj;
+                }
             }
             //sortedListOfBarbersForReAllocation
             var barberQueues = buildBarberQueuesObj(shopQueuesObj, barberStatuses, shopId, avgTimeToCut);
@@ -577,10 +567,12 @@ function addCustomerEvent(customerName, customerKey, channel, shopId, preferredB
                 var sortedBarberList = barberSortedList(barberQueues);
                 const sortedBarber = sortedBarberList[0];
                 barberKey = sortedBarber.getKey();
-                assignOneCustomerToBarber(shopQueuesObj[barberKey], shopId, sortedBarber.getAvgServiceTime(), barberKey, customerKey, customerName, channel);
+                assignOneCustomerToBarber(shopQueuesObj[barberKey], shopId, sortedBarber.getAvgServiceTime(),
+                    barberKey, customerKey, customerName, channel, preferredBarberKey);
             } else {
                 //preferred barber assignment
-                assignOneCustomerToBarber(shopQueuesObj[preferredBarberKey], shopId, avgTimeToCut, preferredBarberKey, customerKey, customerName, channel);
+                assignOneCustomerToBarber(shopQueuesObj[preferredBarberKey], shopId, avgTimeToCut, preferredBarberKey,
+                    customerKey, customerName, channel, preferredBarberKey);
             }
             return shopQueuesObj;
         }, (error, committed, shopQueuesObj) => {
@@ -599,7 +591,8 @@ function addCustomerEvent(customerName, customerKey, channel, shopId, preferredB
         return true;
     }).catch(e => {
         returnStatus = "failure";
-        console.log("Error while barbers fetching - " + e);
+        console.trace(e);
+        console.log("Error while addCustomerEvent - " + e);
     });
     return returnStatus;
 }
