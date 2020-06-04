@@ -461,6 +461,13 @@ function reShuffleCustomerInOneShop(shopId, shopAvgTimeToCut) {
                 }
                 console.log(barberStatuses);
                 console.log(shopQueuesObj);
+                for (const [barberId, status] of Object.entries(barberStatuses)) {
+                    if (status !== 'STOP' && !Object.exists(shopQueuesObj[barberId])) {
+                        //if queue does not exists for available barber than create one
+                        console.log('Create queue for a barber as it does not exisits: ' + barberId);
+                        shopQueuesObj[barberId] = {};
+                    }
+                }
                 var barberQueues = buildBarberQueuesObj(shopQueuesObj, barberStatuses, shopId, shopAvgTimeToCut);
                 var sortedBarberList = barberSortedList(barberQueues);
                 var sortedAllCustList = removeAndGetAllCustomerToBeAddedLater(barberQueues, sortedBarberList, shopQueuesObj);
