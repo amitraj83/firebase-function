@@ -347,12 +347,14 @@ function removeAndGetAllCustomerToBeAddedLater(barberQueues, barberSortedList, s
     barberQueues.forEach(barberQueue => {
         barberQueue.getCustomers().forEach(customer => {
             if (customer['status'] === "QUEUE") {
-                // var custInJSON = customer.toJSON();
                 allQueuedCustomerSorted.push(customer);
                 //remove customer
                 queue = shopQueues[barberQueue.getKey()];
-                console.log('deleting: ' + queue);
-                // delete queue[customer.getKey()]
+                const key = customer['key'];
+                // console.log('deleting1: ' + key);
+                // console.log(Object.keys(queue));
+                delete queue[key]
+                // console.log(Object.keys(queue));
             }
         });
         allQueuedCustomerSorted = allQueuedCustomerSorted.sort(CustomerComparator);
@@ -365,8 +367,9 @@ function assignCustomersToBarbers(shopId, sortedListOfBarbers, sortedListOfCusto
     sortedListOfCustomer.forEach(customer => {
 
         var barberKey = "";
-        if (Object.exists(customer) && customer['preferredBarberKey'] === '') {
-            console.log("[" + shopId + "] " + "To select sortedListOfBarbers - " + JSON.stringify(sortedListOfBarbers));
+        if (!Object.exists(customer['preferredBarberKey']) || customer['preferredBarberKey'] === '') {
+            // customer with no preferred barber
+            // console.log("[" + shopId + "] " + "To select sortedListOfBarbers - " + JSON.stringify(sortedListOfBarbers));
             barberKey = sortedListOfBarbers[0].getKey();
         } else {
             barberKey = customer['preferredBarberKey'];
@@ -505,9 +508,9 @@ function reShuffleCustomerInOneShop(shopId, shopAvgTimeToCut) {
 // exports.reallocate = functions.https.onRequest((request, response) => {
 //     console.log('addCustomer called');
 //     var shopAvgTimeToCut = 15;//aShop.child("avgTimeToCut").val();
-//     var shopId = '-M5hCL0DhhMJ9TM8jB0j';//aShop.key
-//     // reShuffleCustomerInOneShop(shopId, shopAvgTimeToCut);
-//     addCustomerEvent('cust1', '', 'DIRECT', shopId, '');
+//     var shopId = '-M0DoCH8v0Qu0D5zy3LP';//aShop.key
+//     reShuffleCustomerInOneShop(shopId, shopAvgTimeToCut);
+//     // addCustomerEvent('cust1', '', 'DIRECT', shopId, '');
 //     response.status(200).send({
 //         status: 'success'
 //     });
